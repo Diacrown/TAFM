@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Odprawa — Customs Clearance Composer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+<style>
+  :root{
+    --ink:#1C2B39;
+    --ink-soft:#4A5C6B;
+    --paper:#EFEAE0;
+    --paper-raised:#F8F5EE;
+    --line:#D8D0BE;
+    --stamp:#B23A2E;
+    --stamp-soft:#F1DEDA;
+    --verdigris:#3F6B64;
+    --verdigris-soft:#E1EBE8;
+    --gold:#B9862F;
+    --gold-soft:#F3E7CD;
+    --radius:3px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif;
+    font-size:14px;
+    line-height:1.5;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:32px 24px 80px;}
+
+  /* ---------- Header / stamp ---------- */
+  .masthead{
+    display:flex;align-items:flex-end;justify-content:space-between;
+    border-bottom:2px solid var(--ink);
+    padding-bottom:18px;margin-bottom:28px;
+    gap:20px;flex-wrap:wrap;
+  }
+  .masthead h1{
+    font-family:'Source Serif 4',serif;
+    font-weight:700;font-size:30px;letter-spacing:-0.01em;margin:0 0 4px;
+  }
+  .masthead p{margin:0;color:var(--ink-soft);font-size:13px;}
+  .stamp-badge{
+    border:2px solid var(--stamp);color:var(--stamp);
+    border-radius:50%;
+    width:92px;height:92px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    transform:rotate(-8deg);
+    font-family:'IBM Plex Mono',monospace;
+    text-transform:uppercase;letter-spacing:0.06em;
+    flex-shrink:0;
+    transition:transform .25s ease, border-color .25s ease, color .25s ease;
+  }
+  .stamp-badge .t1{font-size:9px;font-weight:600;}
+  .stamp-badge .t2{font-size:12px;font-weight:700;margin-top:2px;text-align:center;line-height:1.15;}
+  .stamp-badge.pulse{animation:stampIn .4s ease;}
+  @keyframes stampIn{from{transform:rotate(-8deg) scale(1.35);opacity:0;}to{transform:rotate(-8deg) scale(1);opacity:1;}}
+
+  /* ---------- Layout ---------- */
+  .grid{display:grid;grid-template-columns:340px 1fr;gap:22px;}
+  @media (max-width:920px){.grid{grid-template-columns:1fr;}}
+
+  .panel{
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:18px 18px 20px;
+    margin-bottom:18px;
+  }
+  .panel h2{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;text-transform:uppercase;letter-spacing:0.08em;
+    color:var(--ink-soft);margin:0 0 14px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .panel h2::after{content:"";flex:1;height:1px;background:var(--line);}
+
+  /* ---------- Tabs ---------- */
+  .tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
+  .tab{
+    flex:1;text-align:center;padding:9px 8px;font-size:12.5px;font-weight:600;
+    border:1px solid var(--line);border-radius:var(--radius);
+    cursor:pointer;background:transparent;color:var(--ink-soft);
+    transition:all .15s ease;
+  }
+  .tab.active{background:var(--ink);border-color:var(--ink);color:var(--paper-raised);}
+  .tab:hover:not(.active){border-color:var(--ink-soft);color:var(--ink);}
+
+  label.field{display:block;margin-bottom:12px;}
+  label.field span{display:block;font-size:11.5px;color:var(--ink-soft);margin-bottom:5px;font-weight:600;}
+  select, input[type=text], input[type=number], textarea{
+    width:100%;padding:8px 9px;border:1px solid var(--line);border-radius:var(--radius);
+    background:#fff;color:var(--ink);font-family:inherit;font-size:13px;
+  }
+  textarea{font-family:'IBM Plex Mono',monospace;font-size:12px;resize:vertical;}
+  select{cursor:pointer;}
+
+  .radio-row{display:flex;flex-direction:column;gap:6px;}
+  .radio-opt{display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;}
+  .radio-opt input{cursor:pointer;}
+
+  .courier-line{
+    margin-top:10px;padding:9px 10px;background:var(--verdigris-soft);
+    border-left:3px solid var(--verdigris);border-radius:2px;
+    font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--verdigris);
+  }
+
+  /* ---------- Upload ---------- */
+  .dropzone{
+    border:1.5px dashed var(--line);border-radius:var(--radius);
+    padding:20px 12px;text-align:center;cursor:pointer;
+    color:var(--ink-soft);font-size:12.5px;transition:border-color .15s;
+  }
+  .dropzone:hover, .dropzone.drag{border-color:var(--verdigris);color:var(--verdigris);}
+  .dropzone input{display:none;}
+  .status-line{font-size:11.5px;color:var(--ink-soft);margin-top:8px;font-family:'IBM Plex Mono',monospace;min-height:14px;}
+  .status-line.busy{color:var(--gold);}
+  .status-line.ok{color:var(--verdigris);}
+  .status-line.warn{color:var(--stamp);}
+
+  details.rawtext{margin-top:10px;}
+  details.rawtext summary{font-size:11.5px;color:var(--ink-soft);cursor:pointer;user-select:none;}
+  details.rawtext textarea{margin-top:6px;height:110px;}
+
+  button.btn{
+    font-family:inherit;font-size:12.5px;font-weight:600;
+    padding:8px 13px;border-radius:var(--radius);border:1px solid var(--ink);
+    background:var(--ink);color:var(--paper-raised);cursor:pointer;
+    transition:opacity .15s;
+  }
+  button.btn:hover{opacity:.85;}
+  button.btn.ghost{background:transparent;color:var(--ink);}
+  button.btn.small{padding:5px 9px;font-size:11.5px;}
+  button.btn.stamp{border-color:var(--stamp);background:var(--stamp);}
+  button.btn.verdi{border-color:var(--verdigris);background:var(--verdigris);}
+  button.btn:disabled{opacity:.4;cursor:not-allowed;}
+
+  /* ---------- Table ---------- */
+  table.items{width:100%;border-collapse:collapse;font-family:'IBM Plex Mono',monospace;font-size:12.5px;}
+  table.items th{
+    text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--ink-soft);border-bottom:2px solid var(--ink);padding:6px 6px;font-weight:600;
+  }
+  table.items td{border-bottom:1px solid var(--line);padding:5px 6px;vertical-align:top;}
+  table.items input{border:1px solid transparent;background:transparent;padding:4px 5px;width:100%;font-family:inherit;font-size:12.5px;border-radius:2px;}
+  table.items input:focus{border-color:var(--verdigris);background:#fff;outline:none;}
+  table.items tr.unmatched td.desc-cell input{color:var(--stamp);}
+  .badge-nomatch{font-size:9.5px;color:var(--stamp);font-family:'IBM Plex Mono',monospace;display:block;margin-top:2px;}
+  .badge-grading{font-size:9.5px;color:var(--verdigris);font-family:'IBM Plex Mono',monospace;display:block;margin-top:2px;}
+  .badge-draft{font-size:9.5px;color:var(--gold);font-family:'IBM Plex Mono',monospace;display:block;margin-top:2px;}
+  .checklist{margin-bottom:12px;font-size:12px;}
+  .checklist-item{display:flex;align-items:center;gap:6px;padding:3px 0;color:var(--ink-soft);}
+  .checklist-item.ok{color:var(--verdigris);}
+  .checklist-item.warn{color:var(--stamp);}
+  .checklist-item .mark{width:14px;text-align:center;font-weight:700;}
+  .row-actions{display:flex;gap:4px;}
+  .icon-btn{
+    border:1px solid var(--line);background:#fff;border-radius:2px;cursor:pointer;
+    width:22px;height:22px;line-height:1;color:var(--ink-soft);font-size:13px;
+  }
+  .icon-btn:hover{border-color:var(--stamp);color:var(--stamp);}
+  .totals-row td{font-weight:700;border-top:2px solid var(--ink);border-bottom:none;background:var(--gold-soft);}
+  .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;}
+
+  .extra-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
+
+  .canned{display:flex;flex-wrap:wrap;gap:8px;}
+  .canned label{
+    display:flex;align-items:center;gap:7px;font-size:12.5px;
+    border:1px solid var(--line);border-radius:var(--radius);
+    padding:7px 10px;cursor:pointer;background:#fff;
+  }
+  .canned label:has(input:checked){border-color:var(--gold);background:var(--gold-soft);}
+
+  /* ---------- Output ---------- */
+  .output-box{
+    background:#fff;color:#1a1a1a;
+    border:1px solid var(--line);
+    border-radius:var(--radius);padding:18px;
+    font-family:'Inter',Arial,sans-serif;font-size:13.5px;
+    line-height:1.6;max-height:560px;overflow:auto;
+  }
+  .output-box p{margin:0 0 12px;}
+  .output-box table{margin-bottom:12px;}
+  .output-box .to-line{color:var(--gold);}
+  .copy-row{display:flex;justify-content:flex-end;gap:8px;margin-top:10px;}
+  .hint{font-size:11.5px;color:var(--ink-soft);margin-top:8px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <div>
+      <h1>Odprawa — Clearance Composer</h1>
+      <p>Diacrown / World Shiner — pl-import translation &amp; formatting, v1</p>
+    </div>
+    <div class="stamp-badge" id="stampBadge">
+      <span class="t1">shipment</span>
+      <span class="t2" id="stampLabel">Bangkok</span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- LEFT COLUMN -->
+    <div>
+      <div class="panel">
+        <h2>Shipment type</h2>
+        <div class="tabs" id="typeTabs">
+          <div class="tab active" data-type="bangkok">Bangkok</div>
+          <div class="tab" data-type="india">India</div>
+          <div class="tab" data-type="elegant">Elegant Coll.</div>
+        </div>
+
+        <label class="field">
+          <span>Invoice source</span>
+          <div class="radio-row" id="sourceRadios">
+            <label class="radio-opt"><input type="radio" name="source" value="ours" checked> Our own invoice</label>
+            <label class="radio-opt"><input type="radio" name="source" value="fedex"> FedEx invoice / AWB</label>
+            <label class="radio-opt"><input type="radio" name="source" value="dhl"> DHL invoice</label>
+          </div>
+        </label>
+
+        <div class="courier-line" id="courierLine"></div>
+
+        <label class="field" id="contentTypeField" style="margin-top:14px;">
+          <span>Package contents line</span>
+          <select id="contentType">
+            <option value="both">Precious &amp; semi-precious (default)</option>
+            <option value="precious">Precious stones only</option>
+            <option value="semi">Semi-precious stones only</option>
+          </select>
+        </label>
+
+        <label class="field" id="elegantContentField" style="margin-top:14px;display:none;">
+          <span>Zawartość przesyłki — general material-type lines</span>
+          <textarea id="elegantContentLines" rows="4" placeholder="One line per material type, e.g. Biżuteria ze złota próby 585 (14K) wysadzana diamentami"></textarea>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
+            <button type="button" class="btn small ghost" data-insert-phrase="gold14">+ Gold 14K/diamonds</button>
+            <button type="button" class="btn small ghost" data-insert-phrase="gold14mixed">+ Gold 14K/diamonds+colored</button>
+            <button type="button" class="btn small ghost" data-insert-phrase="basemetal">+ Base metal/zirconia</button>
+            <button type="button" class="btn small ghost" data-insert-phrase="platinum">+ Platinum 950/diamonds</button>
+            <button type="button" class="btn small ghost" data-insert-phrase="semimount">+ Semi-mount platinum</button>
+          </div>
+          <div class="hint">DHL usually only gives a general description — this is that general line, kept separate from the itemized table below. Polish declension varies by material, so these are editable templates rather than auto-generated.</div>
+        </label>
+      </div>
+
+      <div class="panel" id="reconPanel">
+        <h2>Value reconciliation</h2>
+        <label class="field"><span>Sum of our invoice total(s) (US$)</span>
+          <input type="number" id="indiaInvoiceSum" placeholder="e.g. 29890.56">
+        </label>
+        <label class="field"><span>Total on courier's document (AWB / manifest, US$)</span>
+          <input type="number" id="indiaAwbValue" placeholder="e.g. 29890.56">
+        </label>
+        <div id="indiaReconResult" class="status-line"></div>
+        <div class="hint" id="reconHint">Reconcile before generating. This matters most for India, where FedEx often attaches only one of 2–3 invoices.</div>
+      </div>
+
+      <div class="panel">
+        <h2>Read from attachment</h2>
+        <div class="dropzone" id="dropzone">
+          Drop a PDF or image here, or click to choose a file<br>
+          <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg">
+        </div>
+        <div class="status-line" id="extractStatus"></div>
+        <details class="rawtext">
+          <summary>Raw extracted text</summary>
+          <textarea id="rawText" readonly></textarea>
+        </details>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <button class="btn small verdi" id="parseRowsBtn" disabled>Parse rows from text →</button>
+          <label class="radio-opt" style="font-size:12px;"><input type="checkbox" id="appendMode"> Add to existing rows (multi-invoice)</label>
+        </div>
+        <div class="hint">Digital PDFs are read directly. If a document looks scanned, OCR runs automatically. Row-parsing is a best-effort first pass — always review the table before sending.</div>
+      </div>
+
+      <div class="panel">
+        <h2>Notes &amp; sign-off</h2>
+        <label class="field"><span>Additional notes / remarks (optional)</span>
+          <textarea id="remarksField" rows="3" placeholder="e.g. explain a value mismatch, or any other note for the courier"></textarea>
+        </label>
+        <label class="field"><span>Your name (for sign-off)</span>
+          <input type="text" id="signerName" value="Weronika Byczenko">
+        </label>
+      </div>
+
+      <div class="panel">
+        <h2>Quick phrase translator</h2>
+        <label class="field"><span>Any English text — a word, a sentence, an agent's question</span>
+          <textarea id="quickTranslateIn" rows="3" placeholder="Paste or type English text here…"></textarea>
+        </label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+          <button class="btn small verdi" id="quickTranslateBtn">Translate →</button>
+          <button class="btn small ghost" id="quickTranslateToRemarks" style="display:none;">Insert into Notes/remarks</button>
+        </div>
+        <textarea id="quickTranslateOut" rows="3" readonly placeholder="Polish draft appears here — always double-check wording before using it."></textarea>
+        <div class="hint">Machine-translated draft, not authoritative — good for a quick starting point on wording that isn't part of the fixed templates, but always review before sending.</div>
+      </div>
+
+      <div class="panel">
+        <h2>Canned responses</h2>
+        <div class="canned">
+          <label><input type="checkbox" id="cannedGia"> GIA/carat pushback</label>
+          <label id="cannedMissingWrap" style="display:none;"><input type="checkbox" id="cannedMissing"> Missing invoice note</label>
+          <label><input type="checkbox" id="cannedDeclaration"> Diamond origin declaration (page 2 of invoice)</label>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Reference — payment rules &amp; escalation</h2>
+        <details>
+          <summary style="cursor:pointer;font-size:12.5px;font-weight:600;">FedEx vs. DHL payment rules</summary>
+          <div class="hint" style="margin-top:8px;">
+            <b>FedEx</b> — tax &gt; 13,000 PLN: pay the Proforma Invoice before release. Tax &lt; 13,000 PLN: goods deliver first, FedEx invoices taxes/duties/fees later.<br><br>
+            <b>DHL</b> — always pre-pay via their online debit-card link before delivery. ⚠️ Double-check the delivery address spelling on the payment page — historically almost always misspelled.
+          </div>
+        </details>
+        <details style="margin-top:10px;">
+          <summary style="cursor:pointer;font-size:12.5px;font-weight:600;">🚨 Non-door-to-door escalation (worst case)</summary>
+          <div class="hint" style="margin-top:8px;">
+            1. Hire an independent customs agent to represent the company before the Customs Office.<br>
+            2. Pay taxes manually from the business bank account, using the dedicated TAX transfer category.<br>
+            3. Wait for the Customs Office to formally clear the package.<br>
+            4. Travel to Wirażowa St. for physical pickup.<br>
+            5. Pay terminal/holding charges on-site to LS Airport Services (~1,200 PLN).<br>
+            6. Settle the agent's separate invoice — typically higher than standard FedEx/DHL clearance rates.
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div>
+      <div class="panel">
+        <h2>Line items</h2>
+        <div class="toolbar">
+          <button class="btn small" id="addRowBtn">+ Add row</button>
+          <button class="btn small ghost" id="translateAllBtn">Auto-translate descriptions</button>
+          <button class="btn small ghost" id="translateDraftBtn">Translate unmatched (draft)</button>
+        </div>
+        <table class="items" id="itemsTable">
+          <thead><tr id="itemsHead"></tr></thead>
+          <tbody id="itemsBody"></tbody>
+          <tfoot><tr class="totals-row" id="itemsTotals"></tr></tfoot>
+        </table>
+
+        <div class="extra-fields" id="elegantExtras" style="display:none;">
+          <label class="field"><span>Koszt wysyłki (shipping, US$)</span><input type="number" id="shippingCost" value="0"></label>
+          <label class="field"><span>Ubezpieczenie (insurance, US$)</span><input type="number" id="insuranceCost" value="0"></label>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Generated email</h2>
+        <div class="checklist" id="readinessChecklist"></div>
+        <button class="btn stamp" id="generateBtn" style="margin-bottom:12px;">Generate email text</button>
+        <div class="output-box" id="outputBox">Fill in the shipment details and line items, then click Generate.</div>
+        <div class="copy-row">
+          <button class="btn ghost small" id="downloadBtn">Download as .txt</button>
+          <button class="btn ghost small" id="resetBtn">Reset form</button>
+          <button class="btn ghost small" id="copyBtn">Copy to clipboard</button>
+        </div>
+        <div class="hint">Copies as a real formatted table (not spaced-out text) — paste directly into a Gmail reply and the table borders/columns come through intact.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------------------------------------------------------------
+   Translation dictionary (English gem/material term -> Polish)
+   Extend this list as new terms come up in real invoices.
+--------------------------------------------------------------- */
+const DICTIONARY = {
+  "sapphire":"Szafir","sapphires":"Szafiry",
+  "ruby":"Rubin","rubies":"Rubiny",
+  "emerald":"Szmaragd","emeralds":"Szmaragdy",
+  "aquamarine":"Akwamaryn","aquamarines":"Akwamaryny",
+  "tanzanite":"Tanzanit","tanzanites":"Tanzanity",
+  "tourmaline":"Turmalin","tourmalines":"Turmaliny",
+  "morganite":"Morganit","morganites":"Morganity",
+  "diamond":"Diament","diamonds":"Diamenty",
+  "amethyst":"Ametyst","amethysts":"Ametysty",
+  "citrine":"Cytryn","citrines":"Cytryny",
+  "peridot":"Perydot","peridots":"Perydoty",
+  "garnet":"Granat","garnets":"Granaty",
+  "topaz":"Topaz","topazes":"Topazy",
+  "opal":"Opal","opals":"Opale",
+  "pearl":"Perła","pearls":"Perły",
+  "zircon":"Cyrkon","zircons":"Cyrkony",
+  "cubic zirconia":"Cyrkonia",
+  "spinel":"Spinel","spinels":"Spinele",
+  "iolite":"Jolit","iolites":"Jolity",
+  "kunzite":"Kunzyt","kunzites":"Kunzyty",
+  "moonstone":"Kamień księżycowy",
+  "onyx":"Onyks",
+  "chalcedony":"Chalcedon",
+  "agate":"Agat",
+  "jasper":"Jaspis",
+  "coral":"Koral",
+  "turquoise":"Turkus",
+  "gold":"Złoto","platinum":"Platyna","silver":"Srebro",
+  "cut and polished":"cięte i polerowane",
+  "precious":"szlachetne","semi-precious":"półszlachetne",
+  "lab grown":"syntetyczne",
+  "ring":"Pierścionek wysadzany kamieniami","rings":"Pierścionki wysadzane kamieniami",
+  "earring":"Kolczyk wysadzany kamieniami","earrings":"Kolczyki wysadzane kamieniami",
+  "necklace":"Naszyjnik wysadzany kamieniami","necklaces":"Naszyjniki wysadzane kamieniami",
+  "bracelet":"Bransoletka wysadzana kamieniami","bracelets":"Bransoletki wysadzane kamieniami",
+  "pendant":"Zawieszka wysadzana kamieniami","pendants":"Zawieszki wysadzane kamieniami",
+  "chain":"Łańcuszek","chains":"Łańcuszki",
+  "bangle":"Bransoleta sztywna wysadzana kamieniami","bangles":"Bransolety sztywne wysadzane kamieniami",
+  "stud":"Wkrętka wysadzana kamieniami","studs":"Wkrętki wysadzane kamieniami",
+  "studded with diamonds":"wysadzany diamentami",
+  "studded with diamonds & semi precious stone":"wysadzany diamentami i kamieniami kolorowymi"
+};
+
+/* Metal / purity marks -> the exact Polish material phrasing used in past
+   replies (e.g. "Złoto próby 585 (14K)", "Platyna PT950"). Keyed on the
+   raw token as it appears on Indian jewellery invoices ("14K", "Platinum", ...). */
+const METAL_MAP = {
+  "14k":"Złoto próby 585 (14K)","14kt":"Złoto próby 585 (14K)",
+  "18k":"Złoto próby 750 (18K)","18kt":"Złoto próby 750 (18K)",
+  "9k":"Złoto próby 375 (9K)","10k":"Złoto próby 417 (10K)",
+  "platinum":"Platyna PT950","pt950":"Platyna PT950","950":"Platyna PT950",
+  "silver":"Srebro próby 925","925":"Srebro próby 925"
+};
+
+/* Bangkok stone-name lookup used specifically inside the parenthetical
+   stone list on the Bangkok CI (e.g. "( SAPPHIRE )"), lower-cased plural
+   to match the phrasing actually sent in past replies. */
+const BANGKOK_STONE_MAP = {
+  "sapphire":"szafiry","ruby":"rubiny","emerald":"szmaragdy",
+  "aquamarine":"akwamaryny","tanzanite":"tanzanit","tourmaline":"turmalin",
+  "morganite":"morganit","spinel":"spinele","garnet":"granaty",
+  "topaz":"topazy","amethyst":"ametysty","citrine":"cytryny",
+  "peridot":"perydoty","zircon":"cyrkony","iolite":"jolity","kunzite":"kunzyty"
+};
+
+/* India lots are described singular ("SZMARAGD", not "SZMARAGDY") since
+   each row is typically one parcel/lot of a single stone type, unlike
+   Bangkok's grouped multi-stone category listing. */
+const INDIA_STONE_MAP = {
+  "sapphire":"szafir","ruby":"rubin","emerald":"szmaragd",
+  "aquamarine":"akwamaryn","tanzanite":"tanzanit","tourmaline":"turmalin",
+  "morganite":"morganit","spinel":"spinel","garnet":"granat",
+  "topaz":"topaz","amethyst":"ametyst","citrine":"cytryn",
+  "peridot":"perydot","zircon":"cyrkon","iolite":"jolit","kunzite":"kunzyt"
+};
+
+const COURIER_ADDRESS = { fedex:"pl-import@fedex.com", dhl:"odprawacelna@dhl.com", ours:null };
+const STAMP_LABEL = { bangkok:"Bangkok", india:"India", elegant:"Elegant\nCollection" };
+
+const IMPORTER_ADDRESS =
+`Dane importera/odbiorcy towaru:
+Diacrown sp.z o.o.
+ul. Solidarności 117 / Office 505
+Warsaw 00-140, Poland
+Tax ID: PL7011248167`;
+
+const PROCEDURE_BLOCK =
+`Przeznaczenie: dalsza odsprzedaż przez nasze przedsiębiorstwo
+Rodzaj odprawy celnej: odprawa w PROCEDURZE DOPUSZCZENIA DO OBROTU Z NALICZENIEM NALEŻNOŚCI CELNYCH I PODATKOWYCH`;
+
+const CONTENT_LINES = {
+  both:"Zawartość przesyłki:\nKamienie szlachetne i półszlachetne, cięte i polerowane",
+  precious:"Zawartość przesyłki:\nKamienie szlachetne, cięte i polerowane",
+  semi:"Zawartość przesyłki:\nKamienie półszlachetne, cięte i polerowane"
+};
+
+const LEAD_IN = "Poniżej przesyłam tłumaczenie zawartości przesyłki z faktury:";
+
+const CANNED_GIA =
+`Dzień dobry,
+
+Dziękuję za wiadomość. W nawiązaniu do powyższej prośby chcielibyśmy uprzejmie poinformować, że przy dotychczasowych realizacjach tego typu wysyłek podawanie szczegółowych certyfikatów oraz masy w karatach dla każdego pojedynczego diamentu nie było wymagane przez organy celne.
+
+Standardowa dokumentacja handlowa, którą dołączamy do przesyłki, zawsze była w pełni wystarczająca do pomyślnego zakończenia odprawy. A nasza firma we współpracy z FedEx przeszła dziesiątki takich odpraw.
+
+Chcielibyśmy również zaznaczyć, że w skład przesyłki wchodzą m.in. kamienie bardzo drobne (o wielkości ziarenka piasku). Zgodnie ze standardami rynkowymi oraz procedurami laboratoryjnymi, tego typu mikro-kamienie nie podlegają indywidualnej certyfikacji i fizycznie nie posiadają takich dokumentów.
+
+Wszystkie kluczowe i wymagane prawem dane (w tym opis i łączna wartość towaru) znajdują się na fakturze i w jej tłumaczeniu.
+
+W razie pytań proszę o kontakt telefoniczny pod nr +48 794 730 040
+
+Z poważaniem`;
+
+const CANNED_MISSING =
+`W załączniku dodajemy brakującą fakturę, której FEDEX nie zamieścił w poprzedniej wiadomości. Dotyczy ona towaru zawartego w przesyłce. Po załączeniu tego pliku suma wartości obu faktur jest zgodna z zadeklarowaną wartością przesyłki.`;
+
+const CANNED_DECLARATION =
+`Na stronie drugiej faktury znajduje się deklaracja. Oto tłumaczenie treści faktury na język polski:
+
+a) Diamenty objęte niniejszą fakturą zostały pozyskane/zakupione z legalnych źródeł niezaangażowanych w finansowanie konfliktów, zgodnie z rezolucjami Organizacji Narodów Zjednoczonych i odpowiednimi przepisami krajowymi w miejscu wystawienia faktury. Sprzedawca niniejszym gwarantuje, że diamenty te są wolne od konfliktów i potwierdza przestrzeganie wytycznych WDC SoW (World Diamond Council System of Warranties).
+
+b) Sprzedawca gwarantuje, że produkty te zostały dostarczone zgodnie z Protokołami Odpowiedzialnego Pozyskiwania Signet („SRSP”).
+
+c) Diamenty objęte niniejszą fakturą są wyłącznie pochodzenia naturalnego i są niepoprawiane (untreated), co oparto na wiedzy osobistej i/lub pisemnych gwarancjach dostawcy tych diamentów.
+
+d) Sprzedawca niniejszym gwarantuje, że diamenty objęte niniejszą fakturą są wyłącznie pochodzenia naturalnego, powstały i wzrosły w wyniku naturalnych procesów geologicznych, co oparto na wiedzy osobistej i/lub pisemnych gwarancjach dostawcy tych diamentów.
+
+e) Na podstawie pisemnych zapewnień naszych dostawców, nasze diamenty nie pochodzą z regionów MBADA i Marange w Zimbabwe oraz nie pochodzą z kopalń rzemieślniczych. Diamenty nie pochodzą z recyklingu ani z wydobycia rzemieślniczego; zostały sprawdzone w urządzeniu do testowania diamentów syntetycznych i są wyłącznie pochodzenia naturalnego, wolne od syntetyków, wydobyte z ziemi i niepoprawiane, chyba że zaznaczono inaczej. Diamenty są zgodne z odpowiednią Kartą WFDB dotyczącą ujawniania diamentów syntetycznych, poprawianych i naturalnych, wytycznymi OFAC oraz standardami OECD.
+
+f) Warunki sprzedaży: Niniejszym zgadzamy się na zwrot pełnej ceny zakupu, jeśli została ona zapłacona przez klienta, w przypadku, gdyby jakikolwiek diament wyhodowany w laboratorium znalazł się w towarach objętych niniejszą fakturą pomimo stosowanych przez nas kontroli; po otrzymaniu powiadomienia w ciągu 15 dni od daty otrzymania towaru i zwrocie takich diamentów wykrytych przez klienta wraz z certyfikatem potwierdzającym ten fakt, wystawionym przez uznaną międzynarodową agencję. Żadne odszkodowania za szkody wtórne lub pośrednie nie będą wypłacane.
+
+g) Wszelkie dostarczone diamenty wyhodowane w laboratorium są zgodne z SRSP i gwarantuje się, że nie zawierają żadnych diamentów naturalnych ani żadnych materiałów, które nie są diamentami wyhodowanymi w laboratorium.
+
+h) KALIFORNIA: Sprzedawca niniejszym zaświadcza, że opisana tutaj biżuteria nie zawiera poziomu ołowiu ani kadmu, który zabraniałby sprzedaży biżuterii lub oferowania jej do sprzedaży zgodnie z Artykułem 10.1.1 Rozdział 6.5 Dział 20 Kodeksu Zdrowia i Bezpieczeństwa Kalifornii (Sekcje 25214.1-25214.4.2).
+
+i) Na podstawie pisemnych gwarancji dostawców i dokumentów przewozowych, produkty zafakturowane lub dostarczone na podstawie niniejszego dokumentu nie zawierają surowców pochodzących z Federacji Rosyjskiej ani tam pozyskiwanych. Przesyłka ta nie zawiera żadnych diamentów (ani produktów zawierających diamenty), które pochodziły, zostały wyprodukowane lub przewożone tranzytem przez Rosję. W związku z tym przesyłka ta nie podlega również ograniczeniom wynikającym z rozporządzenia UE 833/2014 (artykuł 3p).
+
+Na podstawie pisemnych zapewnień naszego dostawcy oraz należytej staranności (due diligence), nasze diamenty, złoto, srebro i metale z grupy platynowców nie pochodzą z żadnych obszarów dotkniętych konfliktami i obszarów wysokiego ryzyka (CAHRA) oraz są zgodne z wytycznymi OFAC i standardami OECD dotyczącymi należytej staranności.`;
+
+/* ---------------------------------------------------------------
+   State
+--------------------------------------------------------------- */
+let state = {
+  type: "bangkok",
+  rows: [],
+};
+
+function newRow(extra){
+  return Object.assign({ id: crypto.randomUUID(), desc:"", descPl:"", qty:"", rate:"", price:"", weight:"", material:"", matched:null }, extra||{});
+}
+state.rows = [newRow()];
+
+/* ---------------------------------------------------------------
+   Column config per shipment type
+--------------------------------------------------------------- */
+const COLUMNS = {
+  bangkok: [
+    {key:"desc", label:"Opis (translated)", type:"text"},
+    {key:"qty", label:"Ilość (ct)", type:"num"},
+    {key:"stawka", label:"Stawka", type:"text"},
+    {key:"price", label:"Cena US$", type:"num"}
+  ],
+  india: [
+    {key:"desc", label:"Opis (translated)", type:"text"},
+    {key:"qty", label:"Ilość (ct)", type:"num"},
+    {key:"stawka", label:"Stawka", type:"text"},
+    {key:"price", label:"Cena US$", type:"num"}
+  ],
+  elegant: [
+    {key:"desc", label:"Opis (translated)", type:"text"},
+    {key:"qty", label:"Ilość (szt/pary)", type:"num"},
+    {key:"rate", label:"Stawka $/szt", type:"num"},
+    {key:"price", label:"Cena US$", type:"num"},
+    {key:"weight", label:"Waga (gram)", type:"num"},
+    {key:"material", label:"Materiał", type:"text"}
+  ]
+};
+
+/* ---------------------------------------------------------------
+   Rendering
+--------------------------------------------------------------- */
+const $ = (sel) => document.querySelector(sel);
+const itemsHead = $("#itemsHead");
+const itemsBody = $("#itemsBody");
+const itemsTotals = $("#itemsTotals");
+
+function fmt(n){
+  n = parseFloat(n);
+  if (isNaN(n)) return "0.00";
+  return n.toFixed(2);
+}
+
+/* Diamond grading shorthand (cut, color, clarity grades like "D/Cut VS2",
+   "F-G", "VVS2-SI2") is international terminology that stays as-is even
+   in the Polish table — it isn't a missed translation, so it shouldn't
+   get flagged red like an unrecognized term would. */
+const GRADING_RE = /\b(FL|IF|VVS1|VVS2|VS1|VS2|SI1|SI2|SI3|I1|I2|I3|D\/Cut|Fancy Cut|Round|Cushion|Oval|Pear|Marquise|Radiant|Asscher|Princess|Heart)\b/i;
+
+function autoTranslate(text){
+  if(!text) return {out:"", matched:null};
+  let matchedAny = false;
+  let out = text;
+  // longest keys first so multi-word terms match before single words
+  const keys = Object.keys(DICTIONARY).sort((a,b)=>b.length-a.length);
+  for(const key of keys){
+    const re = new RegExp("\\b"+key.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')+"\\b","gi");
+    if(re.test(out)){
+      out = out.replace(re, DICTIONARY[key]);
+      matchedAny = true;
+    }
+  }
+  if(!matchedAny && GRADING_RE.test(text)) matchedAny = "grading";
+  return {out, matched: matchedAny};
+}
+
+function renderTable(){
+  const cols = COLUMNS[state.type];
+  itemsHead.innerHTML = "<th>#</th>" + cols.map(c=>`<th>${c.label}</th>`).join("") + "<th></th>";
+  itemsBody.innerHTML = "";
+  state.rows.forEach((row, idx) => {
+    const tr = document.createElement("tr");
+    if(row.matched === false) tr.classList.add("unmatched");
+    let cells = `<td style="color:var(--ink-soft);">${idx+1}</td>`;
+    cols.forEach(c=>{
+      const val = row[c.key] ?? "";
+      const cls = c.key === "desc" ? "desc-cell" : "";
+      cells += `<td class="${cls}"><input data-row="${row.id}" data-key="${c.key}" type="${c.type==='num'?'text':'text'}" value="${val.toString().replace(/"/g,'&quot;')}">${(c.key==='desc' && row.matched===false)?'<span class="badge-nomatch">no dictionary match — check translation</span>':''}${(c.key==='desc' && row.matched==='grading')?'<span class="badge-grading">grading code — left as international shorthand</span>':''}${(c.key==='desc' && row.matched==='draft')?'<span class="badge-draft">machine-translated draft — verify wording</span>':''}</td>`;
+    });
+    cells += `<td class="row-actions"><button class="icon-btn" data-dup="${row.id}" title="Duplicate row">⧉</button><button class="icon-btn" data-del="${row.id}" title="Delete row">×</button></td>`;
+    tr.innerHTML = cells;
+    itemsBody.appendChild(tr);
+  });
+
+  // totals
+  const sumQty = state.rows.reduce((a,r)=>a+(parseFloat(r.qty)||0),0);
+  const sumPrice = state.rows.reduce((a,r)=>a+(parseFloat(r.price)||0),0);
+  const sumWeight = state.rows.reduce((a,r)=>a+(parseFloat(r.weight)||0),0);
+
+  if(state.type === "elegant"){
+    itemsTotals.innerHTML = `<td></td><td>RAZEM</td><td>${fmt(sumQty)}</td><td></td><td>${fmt(sumPrice)}</td><td>${fmt(sumWeight)}</td><td></td><td></td>`;
+    $("#elegantExtras").style.display = "grid";
+  } else {
+    itemsTotals.innerHTML = `<td></td><td>Razem</td><td>${fmt(sumQty)}</td><td>TOTAL</td><td>${fmt(sumPrice)}</td><td></td>`;
+    $("#elegantExtras").style.display = "none";
+  }
+
+  // wire inputs
+  itemsBody.querySelectorAll("input").forEach(inp=>{
+    inp.addEventListener("input", (e)=>{
+      const rowId = e.target.dataset.row;
+      const key = e.target.dataset.key;
+      const row = state.rows.find(r=>r.id===rowId);
+      row[key] = e.target.value;
+      if(key==="desc") row.matched = null;
+      // live update totals without full re-render (avoid losing focus)
+      updateTotalsOnly();
+      updateChecklist();
+    });
+  });
+  itemsBody.querySelectorAll("[data-del]").forEach(btn=>{
+    btn.addEventListener("click", (e)=>{
+      state.rows = state.rows.filter(r=>r.id !== e.target.dataset.del);
+      if(state.rows.length===0) state.rows.push(newRow());
+      renderTable();
+    });
+  });
+  itemsBody.querySelectorAll("[data-dup]").forEach(btn=>{
+    btn.addEventListener("click", (e)=>{
+      const idx = state.rows.findIndex(r=>r.id === e.target.dataset.dup);
+      if(idx === -1) return;
+      const copy = Object.assign({}, state.rows[idx], { id: crypto.randomUUID() });
+      state.rows.splice(idx+1, 0, copy);
+      renderTable();
+    });
+  });
+  updateChecklist();
+}
+
+function updateTotalsOnly(){
+  const sumQty = state.rows.reduce((a,r)=>a+(parseFloat(r.qty)||0),0);
+  const sumPrice = state.rows.reduce((a,r)=>a+(parseFloat(r.price)||0),0);
+  const sumWeight = state.rows.reduce((a,r)=>a+(parseFloat(r.weight)||0),0);
+  if(state.type === "elegant"){
+    itemsTotals.innerHTML = `<td></td><td>RAZEM</td><td>${fmt(sumQty)}</td><td></td><td>${fmt(sumPrice)}</td><td>${fmt(sumWeight)}</td><td></td><td></td>`;
+  } else {
+    itemsTotals.innerHTML = `<td></td><td>Razem</td><td>${fmt(sumQty)}</td><td>TOTAL</td><td>${fmt(sumPrice)}</td><td></td>`;
+  }
+}
+
+/* ---------------------------------------------------------------
+   Tabs / shipment type
+--------------------------------------------------------------- */
+document.querySelectorAll(".tab").forEach(tab=>{
+  tab.addEventListener("click", ()=>{
+    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+    tab.classList.add("active");
+    state.type = tab.dataset.type;
+    $("#cannedMissingWrap").style.display = state.type === "india" ? "flex" : "none";
+    $("#reconHint").innerText = state.type === "india"
+      ? "Reconcile before generating. AWB Customs Value = sum of ALL invoices (Natural + Lab-grown + Jewellery). FedEx often attaches only one — find missing ones in the WSL EXP email archive, use append mode above to add each invoice, and tick the missing-invoice note."
+      : state.type === "bangkok"
+      ? "Reconcile before generating. Note: if the export total exceeds 13,000 PLN, FedEx sends a proforma invoice — Poland office pays it before clearance, then shares the received HTML file with the Polish CA."
+      : "Reconcile before generating. If it doesn't match, add a note below explaining the difference.";
+    $("#contentTypeField").style.display = state.type === "elegant" ? "none" : "block";
+    $("#elegantContentField").style.display = state.type === "elegant" ? "block" : "none";
+    const badge = $("#stampBadge");
+    $("#stampLabel").innerText = STAMP_LABEL[state.type];
+    badge.classList.remove("pulse"); void badge.offsetWidth; badge.classList.add("pulse");
+    renderTable();
+  });
+});
+
+/* ---------------------------------------------------------------
+   Source radios -> courier address hint
+--------------------------------------------------------------- */
+document.querySelectorAll('input[name="source"]').forEach(r=>{
+  r.addEventListener("change", updateCourierLine);
+});
+function updateCourierLine(){
+  const val = document.querySelector('input[name="source"]:checked').value;
+  const addr = COURIER_ADDRESS[val];
+  $("#courierLine").innerText = addr ? `Reply thread → ${addr}` : "Internal invoice — no courier reply address";
+}
+updateCourierLine();
+
+const ELEGANT_PHRASES = {
+  gold14: "Biżuteria ze złota próby 585 (14K) wysadzana diamentami",
+  gold14mixed: "Biżuteria ze złota próby 585 (14K) wysadzana diamentami i kamieniami kolorowymi",
+  basemetal: "Biżuteria ze stopu metali nieszlachetnych AY342 wysadzana cyrkoniami",
+  platinum: "Biżuteria z platyny próby 950 wysadzana diamentami",
+  semimount: 'Biżuteria typu "semi-mount" (półfabrykaty) z platyny próby 950 częściowo wysadzana diamentami'
+};
+document.querySelectorAll("[data-insert-phrase]").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    const ta = $("#elegantContentLines");
+    const phrase = ELEGANT_PHRASES[btn.dataset.insertPhrase];
+    ta.value = ta.value.trim() ? ta.value.trim() + "\n" + phrase : phrase;
+    ta.style.borderColor = "";
+  });
+});
+$("#elegantContentLines").addEventListener("input", ()=>{
+  $("#elegantContentLines").style.borderColor = "";
+});
+
+/* ---------------------------------------------------------------
+   India reconciliation
+--------------------------------------------------------------- */
+function checkIndiaRecon(){
+  const inv = parseFloat($("#indiaInvoiceSum").value);
+  const awb = parseFloat($("#indiaAwbValue").value);
+  const el = $("#indiaReconResult");
+  if(isNaN(inv) || isNaN(awb)){ el.innerText=""; el.className="status-line"; updateChecklist(); return; }
+  const diff = Math.abs(inv-awb);
+  if(diff < 0.01){
+    el.innerText = "✓ Matches — safe to proceed.";
+    el.className = "status-line ok";
+  } else {
+    el.innerText = `⚠ Mismatch of $${diff.toFixed(2)} — locate the missing invoice from WSL EXP before replying.`;
+    el.className = "status-line warn";
+  }
+  updateChecklist();
+}
+$("#indiaInvoiceSum").addEventListener("input", checkIndiaRecon);
+$("#indiaAwbValue").addEventListener("input", checkIndiaRecon);
+
+/* Live readiness checklist — surfaces the most common reasons a
+   Generate attempt turns out incomplete, before the user clicks it,
+   rather than after. Cheap to compute, re-run on every relevant change. */
+function updateChecklist(){
+  const el = $("#readinessChecklist");
+  if(!el) return;
+  const items = [];
+
+  const hasRows = state.rows.some(r => (r.desc||"").trim() && parseFloat(r.price));
+  items.push({ ok: hasRows, label: hasRows ? "Line items added" : "No line items yet" });
+
+  if(state.type === "elegant"){
+    const hasContent = !!$("#elegantContentLines").value.trim();
+    items.push({ ok: hasContent, label: hasContent ? "Package contents filled" : "Package contents empty" });
+  }
+
+  const inv = parseFloat($("#indiaInvoiceSum").value);
+  const awb = parseFloat($("#indiaAwbValue").value);
+  const remarksFilled = !!$("#remarksField").value.trim();
+  if(!isNaN(inv) && !isNaN(awb)){
+    const matches = Math.abs(inv-awb) < 0.01;
+    items.push({ ok: matches || remarksFilled, label: matches ? "Values reconciled" : (remarksFilled ? "Value mismatch — explained in notes" : "Value mismatch — add a note explaining it") });
+  } else {
+    items.push({ ok: null, label: "Value reconciliation not checked yet" });
+  }
+
+  const signerFilled = !!$("#signerName").value.trim();
+  items.push({ ok: signerFilled, label: signerFilled ? "Signer name set" : "Signer name missing" });
+
+  el.innerHTML = items.map(i=>{
+    const cls = i.ok === true ? "ok" : (i.ok === false ? "warn" : "");
+    const mark = i.ok === true ? "✓" : (i.ok === false ? "⚠" : "•");
+    return `<div class="checklist-item ${cls}"><span class="mark">${mark}</span>${i.label}</div>`;
+  }).join("");
+}
+$("#remarksField").addEventListener("input", updateChecklist);
+$("#signerName").addEventListener("input", updateChecklist);
+$("#elegantContentLines").addEventListener("input", updateChecklist);
+
+/* ---------------------------------------------------------------
+   Row add / translate
+--------------------------------------------------------------- */
+$("#addRowBtn").addEventListener("click", ()=>{
+  state.rows.push(newRow());
+  renderTable();
+});
+$("#translateAllBtn").addEventListener("click", ()=>{
+  state.rows.forEach(r=>{
+    const {out, matched} = state.type === "india"
+      ? translateIndiaDescription(r.desc, false)
+      : autoTranslate(r.desc);
+    r.desc = out;
+    r.matched = matched;
+  });
+  renderTable();
+});
+
+$("#translateDraftBtn").addEventListener("click", async ()=>{
+  const btn = $("#translateDraftBtn");
+  const targets = state.rows.filter(r => r.matched === false && r.desc && r.desc.trim());
+  if(!targets.length){
+    btn.innerText = "Nothing unmatched to translate";
+    setTimeout(()=>btn.innerText = "Translate unmatched (draft)", 1800);
+    return;
+  }
+  btn.disabled = true;
+  const original = btn.innerText;
+  for(let i=0;i<targets.length;i++){
+    btn.innerText = `Translating ${i+1}/${targets.length}…`;
+    const draft = await translateToPolishDraft(targets[i].desc);
+    if(draft){
+      targets[i].desc = draft;
+      targets[i].matched = "draft";
+    }
+  }
+  btn.disabled = false;
+  btn.innerText = original;
+  renderTable();
+});
+
+$("#quickTranslateBtn").addEventListener("click", async ()=>{
+  const btn = $("#quickTranslateBtn");
+  const input = $("#quickTranslateIn").value.trim();
+  const outBox = $("#quickTranslateOut");
+  const insertBtn = $("#quickTranslateToRemarks");
+  if(!input){ outBox.value = ""; insertBtn.style.display = "none"; return; }
+  btn.disabled = true;
+  const original2 = btn.innerText;
+  btn.innerText = "Translating…";
+  const draft = await translateToPolishDraft(input);
+  btn.disabled = false;
+  btn.innerText = original2;
+  if(draft){
+    outBox.value = draft;
+    insertBtn.style.display = "inline-block";
+  } else {
+    outBox.value = "Couldn't reach the translation service — check your connection and try again.";
+    insertBtn.style.display = "none";
+  }
+});
+$("#quickTranslateToRemarks").addEventListener("click", ()=>{
+  const remarks = $("#remarksField");
+  const draft = $("#quickTranslateOut").value;
+  remarks.value = remarks.value.trim() ? remarks.value.trim() + "\n" + draft : draft;
+});
+
+/* ---------------------------------------------------------------
+   File extraction: PDF text / OCR fallback / image OCR
+--------------------------------------------------------------- */
+if(window.pdfjsLib){
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+}
+const dropzone = $("#dropzone");
+const fileInput = $("#fileInput");
+const extractStatus = $("#extractStatus");
+const rawText = $("#rawText");
+const parseRowsBtn = $("#parseRowsBtn");
+
+dropzone.addEventListener("click", ()=>fileInput.click());
+dropzone.addEventListener("dragover", e=>{e.preventDefault(); dropzone.classList.add("drag");});
+dropzone.addEventListener("dragleave", ()=>dropzone.classList.remove("drag"));
+dropzone.addEventListener("drop", e=>{
+  e.preventDefault(); dropzone.classList.remove("drag");
+  if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener("change", e=>{
+  if(e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+function setStatus(msg, cls){
+  extractStatus.innerText = msg;
+  extractStatus.className = "status-line" + (cls?(" "+cls):"");
+}
+
+async function handleFile(file){
+  rawText.value = "";
+  parseRowsBtn.disabled = true;
+  const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  try{
+    if(isPdf){
+      setStatus("Reading PDF…", "busy");
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+      let text = "";
+      let firstPageCanvas = null;
+      for(let p=1; p<=pdf.numPages; p++){
+        const page = await pdf.getPage(p);
+        const content = await page.getTextContent();
+        /* Reconstruct visual reading order: PDFs can store text items in
+           any internal order, so sort by y (top→bottom), group items within
+           ~4px vertical tolerance into one line, then sort each line by x. */
+        const items = content.items
+          .filter(i=>i.str.trim().length)
+          .map(i=>({ str:i.str, x:i.transform[4], y:i.transform[5] }))
+          .sort((a,b)=> b.y - a.y || a.x - b.x);
+        const linesArr = [];
+        for(const it of items){
+          const last = linesArr[linesArr.length-1];
+          if(last && Math.abs(last.y - it.y) < 4){ last.items.push(it); }
+          else linesArr.push({ y: it.y, items:[it] });
+        }
+        const pageText = linesArr
+          .map(l => l.items.sort((a,b)=>a.x-b.x).map(i=>i.str).join(" "))
+          .join("\n");
+        text += pageText + "\n";
+        if(p===1 && pageText.trim().length < 20){
+          const viewport = page.getViewport({scale:3});
+          const canvas = document.createElement("canvas");
+          canvas.width = viewport.width; canvas.height = viewport.height;
+          await page.render({canvasContext:canvas.getContext("2d"), viewport}).promise;
+          firstPageCanvas = canvas;
+        }
+      }
+      if(text.trim().length < 20 && firstPageCanvas){
+        setStatus("No text layer found — this looks scanned. Running OCR…", "busy");
+        const {data:{text:ocrText}} = await Tesseract.recognize(firstPageCanvas, "eng+pol");
+        rawText.value = ocrText;
+        setStatus("OCR complete — review extracted text, then parse rows.", "ok");
+      } else {
+        rawText.value = text;
+        setStatus("Digital PDF read successfully.", "ok");
+      }
+    } else {
+      setStatus("Running OCR on image…", "busy");
+      const {data:{text:ocrText}} = await Tesseract.recognize(file, "eng+pol");
+      rawText.value = ocrText;
+      setStatus("OCR complete — review extracted text, then parse rows.", "ok");
+    }
+    parseRowsBtn.disabled = rawText.value.trim().length === 0;
+  } catch(err){
+    console.error(err);
+    setStatus("Couldn't read that file — try manual entry instead.", "warn");
+  }
+}
+
+/* -----------------------------------------------------------------
+   Format-specific parsers, built from real sample invoices:
+   - Bangkok: Diacrown Co. Ltd commercial invoice (scanned), rows are
+     per stone-category ("PRECIOUS CUT & POLISHED  53.21 CTS  23882.97")
+     with the stone names on a following parenthetical line.
+   - India: Diacrown "TAX INVOICE" (digital PDF), one row per lot —
+     description text, then Pcs, Carats, Rate, Amount.
+   - Elegant Collection: the "LIST OF ITEMS" packing-list table —
+     Sr.No, Style, Description, PO#, Qty, Gross Wt(gms), KT, Price, Value.
+   Each returns null if the text doesn't look like that format, so the
+   caller can try the others before falling back to a generic guess.
+----------------------------------------------------------------- */
+
+function translateBangkokStones(paren){
+  // split on comma OR newline — OCR sometimes drops the comma at a
+  // line wrap, leaving only the newline as the actual separator
+  const names = paren.split(/[,\n]+/).map(s=>s.trim().toLowerCase()).filter(Boolean);
+  const out = names.map(n => BANGKOK_STONE_MAP[n] || n);
+  return out.join(", ");
+}
+
+function parseBangkokCI(text){
+  /* Global, whole-text scan rather than per-line matching: OCR line
+     segmentation is unpredictable — it can merge both category rows
+     onto a single text line, or split one row across several. A
+     per-line match() without the global flag would silently return
+     only the first row in the merged-line case, undercounting rows
+     with no visible error. Scanning globally finds every occurrence
+     regardless of how OCR happened to break the lines.
+     \S{0,3} between CUT and POLISHED tolerates OCR misreading "&" as
+     something else entirely (seen in the wild: "8") rather than just
+     dropping it — a literal &? only forgives a MISSING character, not
+     a WRONG one. */
+  const rowRe = /(PRECIOUS|SEMI\s*-?\s*PRECIOUS)\s+CUT\s*\S{0,3}\s*POLISHED\s+([\d.]+)\s*CTS?\.?\s+([\d,]+\.\d+)/gi;
+  const rows = [];
+  let m;
+  while((m = rowRe.exec(text)) !== null){
+    const isSemi = /semi/i.test(m[1]);
+    // stone list is the next "( ... )" after this match, which may be
+    // right after it or a short distance further in the text
+    const searchStart = m.index + m[0].length;
+    const window = text.slice(searchStart, searchStart + 300);
+    const stoneMatch = window.match(/\(([^)]*)\)/);
+    const stones = stoneMatch ? translateBangkokStones(stoneMatch[1]) : "";
+    const base = isSemi ? "Kamienie półszlachetne, cięte i polerowane" : "Kamienie szlachetne, cięte i polerowane";
+    rows.push(newRow({
+      desc: stones ? `${base} (${stones})` : base,
+      qty: m[2], price: m[3].replace(/,/g,""), matched: true
+    }));
+  }
+  return rows.length ? rows : null;
+}
+
+/* India diamond/gemstone lots aren't translated word-for-word — every
+   line gets wrapped in the same template as Bangkok's precious-stone
+   line: "Kamienie szlachetne, cięte i polerowane (X)", where X is
+   DIAMENT NATURALNY, DIAMENT LABORATORYJNY, or the specific gem name.
+   Grading codes (Round D-Cut, VS2, F-G, ...) describe the lot but never
+   appear in the sent translation — they're dropped, not kept in English. */
+const DIAMOND_SHAPE_RE = /\b(Round|Cushion|Oval|Pear|Marquise|Radiant|Asscher|Princess|Heart)\b.*\b(D[\/\s-]?Cut|Cut)\b/i;
+
+/* Machine-translation assist for arbitrary English text the fixed
+   dictionary doesn't cover (novel item descriptions, ad-hoc remarks,
+   anything typed in free text). Uses MyMemory's free, key-less,
+   CORS-enabled endpoint. This is explicitly a DRAFT, never applied
+   silently — every result is labelled and left for the user to verify,
+   since customs paperwork needs exact, consistent terminology that a
+   generic translator can't guarantee. Returns null on any failure so
+   callers can fall back gracefully (e.g. offline, rate-limited). */
+async function translateToPolishDraft(text){
+  if(!text || !text.trim()) return null;
+  try{
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|pl`;
+    const res = await fetch(url);
+    if(!res.ok) return null;
+    const data = await res.json();
+    const out = data?.responseData?.translatedText;
+    if(!out || /MYMEMORY WARNING/i.test(out)) return null;
+    return out;
+  } catch(err){
+    console.error("Translation draft failed:", err);
+    return null;
+  }
+}
+
+function translateIndiaDescription(rawDesc, labGrownHint){
+  const isLabGrown = labGrownHint || /\bLGD\b/i.test(rawDesc);
+  const isDiamondLot = isLabGrown || DIAMOND_SHAPE_RE.test(rawDesc);
+  let label;
+  if(isDiamondLot){
+    label = isLabGrown ? "DIAMENT LABORATORYJNY" : "DIAMENT NATURALNY";
+  } else {
+    const keys = Object.keys(INDIA_STONE_MAP).sort((a,b)=>b.length-a.length);
+    const hit = keys.find(k => new RegExp("\\b"+k+"\\b","i").test(rawDesc));
+    label = hit ? INDIA_STONE_MAP[hit].toUpperCase() : null;
+  }
+  if(!label) return { out: rawDesc, matched: false };
+  return { out: `Kamienie szlachetne, cięte i polerowane (${label})`, matched: true };
+}
+
+function parseIndiaTaxInvoice(text){
+  /* Numeric-token counting instead of matching the literal "Pc(s)" text.
+     OCR renders that label inconsistently on every scan (Pc{s), Pe(s),
+     Pels)...) — matching it literally is itself a form of hardcoding
+     that breaks the moment a new document OCRs it slightly differently.
+     Counting the trailing numeric tokens on a row (carats, rate, amount
+     — with an optional pieces-count further back that we ignore) works
+     regardless of how that label gets mangled, and scales to any number
+     of rows since it's applied per line in a loop, not a fixed count. */
+  const labGrownInvoice = /LAB\s*GROWN/i.test(text);
+  // strip common OCR noise characters that show up mid-line, not just at
+  // the end (stray pipes, curly braces from misread parentheses)
+  const lines = text.split("\n").map(l => l.replace(/[|`{}]+/g, " ").replace(/\s{2,}/g," ").trim());
+  const rowStart = /^\s*(\d+)\s+(.+)$/;
+  const rows = [];
+  for(const line of lines){
+    const m = line.match(rowStart);
+    if(!m) continue;
+    const rest = m[2];
+    const nums = rest.match(/[\d,]+\.\d+|\d+/g);
+    if(!nums || nums.length < 2) continue;
+    const tailCount = Math.min(nums.length, 3);
+    const tail = nums.slice(-tailCount);
+    const qty = tailCount === 3 ? tail[0] : nums[nums.length-2];
+    const price = tail[tail.length-1];
+    const cutToken = tailCount === 3 ? tail[0] : nums[nums.length-2];
+    const cutIdx = rest.indexOf(cutToken);
+    let desc = cutIdx > 0 ? rest.slice(0, cutIdx) : rest;
+    desc = desc.replace(/\bPc\W*s?\W*$/i,"").replace(/\d+\s*$/,"").replace(/\s{2,}/g," ").trim();
+    if(!desc) continue;
+    const {out, matched} = translateIndiaDescription(desc, labGrownInvoice);
+    rows.push(newRow({ desc: out, qty, price: price.replace(/,/g,""), matched }));
+  }
+  return rows.length ? rows : null;
+}
+
+function metalToMaterial(token){
+  const key = token.toLowerCase().replace(/\s+/g,"");
+  return METAL_MAP[key] || token;
+}
+
+/* Weight-aware comma normalizer: real jewellery gross weights in this
+   business are always well under 100g per piece, so if reading a comma
+   as a thousands-separator produces an implausible weight, the comma
+   was almost certainly OCR misreading a decimal point instead (seen in
+   the wild: "1,990" meant to be 1.990g, not 1,990g). */
+function normalizeWeight(tok){
+  const asThousands = tok.replace(/,(\d{3})(?=\D|$)/g, "$1");
+  if(parseFloat(asThousands) <= 100) return asThousands;
+  return tok.replace(",", ".");
+}
+function normalizeNum(tok){
+  let t = tok.replace(/,(\d{3})(?=\D|$)/g, "$1");
+  t = t.replace(",", ".");
+  return t;
+}
+
+function parseElegantList(text){
+  /* Anchored on the jewelry noun + metal marker rather than an exact
+     column-by-column regex. A rigid single pattern breaks the moment OCR
+     merges columns with pipes/brackets, corrupts the row-number index
+     ("1g" for "18", "15," with a stuck comma — neither of which the row
+     even needs downstream), or runs words together ("IRing", "114K").
+     No leading \b on the noun/metal match, since merged tokens are the
+     norm on scanned invoices, not the exception. */
+  const jewelryNounRe = /(Ring|Earrings?|Necklace|Bracelet|Pendant|Chain|Bangle|Studs?)\b/i;
+  const metalRe = /(14K|18K|9K|10K|Platinum|PT950|Silver)\b/i;
+  const lines = text.split("\n").map(l => l.replace(/[|{}\[\]]+/g, " ").replace(/\s{2,}/g," ").trim());
+  const rows = [];
+  for(const rest of lines){
+    const nounM = rest.match(jewelryNounRe);
+    const metalM = rest.match(metalRe);
+    if(!nounM || !metalM) continue;
+    const metalIdx = metalM.index;
+    const beforeText = rest.slice(0, metalIdx);
+    // exclude any number immediately followed by "*" — that's always a
+    // style/PO reference in these documents, never a qty or weight
+    const beforeTokens = [];
+    const tokenRe = /([\d,]+\.?\d*)(\*?)/g;
+    let tm;
+    while((tm = tokenRe.exec(beforeText)) !== null){
+      if(tm[1] && !tm[2]) beforeTokens.push(tm[1]);
+    }
+    const after = rest.slice(metalIdx + metalM[0].length).match(/[\d,]+\.?\d*/g) || [];
+    if(beforeTokens.length < 1 || after.length < 1) continue;
+    const weight = normalizeWeight(beforeTokens[beforeTokens.length-1]);
+    const qty = beforeTokens.length >= 2 ? normalizeNum(beforeTokens[beforeTokens.length-2]) : "1";
+    const price = normalizeNum(after[0]);
+    const {out:descPl, matched} = autoTranslate(nounM[1]);
+    rows.push(newRow({
+      desc: descPl, qty, weight,
+      material: metalToMaterial(metalM[1]),
+      price, matched
+    }));
+  }
+  return rows.length ? rows : null;
+}
+
+/* Generic last-resort guesser: looks for lines ending in numeric tokens.
+   Deliberately conservative — kept as the fallback when none of the
+   known formats above match, so the table is always editable after. */
+function parseGeneric(text){
+  const lines = text.split("\n").map(l=>l.trim()).filter(Boolean);
+  const parsed = [];
+  lines.forEach(line=>{
+    const nums = line.match(/-?\d[\d,]*\.\d+|-?\d+/g);
+    if(!nums || nums.length < 2) return;
+    const cleanNums = nums.map(n=>parseFloat(n.replace(/,/g,"")));
+    let desc = line;
+    nums.slice(-2).forEach(n=>{ desc = desc.replace(n, ""); });
+    desc = desc.replace(/\s{2,}/g," ").trim();
+    if(!desc) return;
+    const row = newRow({desc});
+    if(state.type === "elegant" && cleanNums.length >= 3){
+      row.qty = cleanNums[cleanNums.length-3];
+      row.rate = cleanNums[cleanNums.length-2];
+      row.price = cleanNums[cleanNums.length-1];
+    } else {
+      row.qty = cleanNums[cleanNums.length-2];
+      row.price = cleanNums[cleanNums.length-1];
+    }
+    /* Sanity filter: on OCR'd forms, tracking numbers, phone numbers,
+       account numbers, and postal codes can get misread as quantities
+       or prices, producing absurd values. Real invoice quantities and
+       prices in this business are always well under these thresholds —
+       skip anything that looks like a misread reference number rather
+       than a real figure. */
+    if(Math.abs(row.qty) > 100000 || Math.abs(row.price) > 1000000) return;
+    if(/^\d{5,}$/.test(String(row.qty)) || /^\d{5,}$/.test(String(row.price))) return;
+    parsed.push(row);
+  });
+  return parsed.length ? parsed : null;
+}
+
+/* Try the parser matching the selected shipment type first, then the
+   others, then fall back to the generic guess. Also opportunistically
+   pulls the AWB Customs Value / invoice CIF total into the India
+   reconciliation fields when present in the text. */
+parseRowsBtn.addEventListener("click", ()=>{
+  const text = rawText.value;
+  const byType = { bangkok: parseBangkokCI, india: parseIndiaTaxInvoice, elegant: parseElegantList };
+  let rows = byType[state.type] ? byType[state.type](text) : null;
+  let usedOtherFormat = false;
+  if(!rows){
+    /* Try the other two known layouts in case the source picker didn't
+       match the tab, but never fall back to a loose guess — on OCR'd
+       text a loose guess reliably turns tracking numbers, phone numbers,
+       and address fragments into fake rows, which is worse than no
+       rows at all. Only the three validated column formats auto-fill. */
+    rows = parseBangkokCI(text) || parseIndiaTaxInvoice(text) || parseElegantList(text);
+    if(rows) usedOtherFormat = true;
+  }
+
+  const appendOn = $("#appendMode").checked;
+
+  const awbMatch = text.match(/CUSTOMS VALUE:\s*([\d,]+\.\d+)/i);
+  const cifMatch = text.match(/CIF\s*\$?\s*([\d,]+\.\d+)/i) || text.match(/Total:\s*[\d.]+\s*CIF\s*([\d,]+\.\d+)/i);
+  if(awbMatch) $("#indiaAwbValue").value = awbMatch[1].replace(/,/g,"");
+  if(cifMatch){
+    const cif = parseFloat(cifMatch[1].replace(/,/g,""));
+    const prev = parseFloat($("#indiaInvoiceSum").value) || 0;
+    /* In append mode each parsed invoice's CIF adds to the running sum,
+       which is what gets compared to the AWB Customs Value for split
+       Natural / Lab-grown / Jewellery shipments. */
+    $("#indiaInvoiceSum").value = (appendOn ? prev + cif : cif).toFixed(2);
+  }
+  if(awbMatch || cifMatch) checkIndiaRecon();
+
+  if(rows){
+    const hadRealRows = state.rows.some(r => (r.desc||"").trim() || parseFloat(r.price));
+    if(appendOn && hadRealRows){
+      state.rows = state.rows.concat(rows);
+    } else {
+      state.rows = rows;
+    }
+    setStatus(
+      (usedOtherFormat
+        ? `Parsed ${rows.length} row(s) — matched a different shipment type's layout than the selected tab, please confirm that's expected.`
+        : `Parsed ${rows.length} row(s) from the recognized invoice layout — please review.`) +
+        (appendOn && hadRealRows ? ` Added to existing table (${state.rows.length} total).` : ""),
+      usedOtherFormat ? "warn" : "ok"
+    );
+  } else {
+    setStatus("Couldn't recognize this invoice's layout — no rows auto-filled. Enter the line(s) manually below (usually quicker than fixing a bad OCR guess).", "warn");
+  }
+  renderTable();
+});
+
+/* ---------------------------------------------------------------
+   Generate final email text
+--------------------------------------------------------------- */
+function esc(s){
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+$("#generateBtn").addEventListener("click", ()=>{
+  const cols = COLUMNS[state.type];
+
+  if(state.type === "elegant" && !$("#elegantContentLines").value.trim()){
+    $("#elegantContentLines").style.borderColor = "var(--stamp)";
+    $("#elegantContentLines").focus();
+    $("#outputBox").innerHTML = '<p style="color:var(--stamp);">⚠ Fill in the "Zawartość przesyłki — general material-type lines" field above before generating — the email can\'t be sent with that line blank.</p>';
+    return;
+  }
+
+  const source = document.querySelector('input[name="source"]:checked').value;
+  const addr = COURIER_ADDRESS[source];
+
+  let contentLineText, contentLineHtml;
+  if(state.type === "elegant"){
+    const lines = $("#elegantContentLines").value.trim();
+    const arr = (lines || "(fill in material-type description lines above)").split("\n");
+    contentLineText = "Zawartość przesyłki:\n" + arr.join("\n\n");
+    contentLineHtml = "<b>Zawartość przesyłki:</b><br>" + arr.map(l=>esc(l)).join("<br><br>");
+  } else {
+    const line = CONTENT_LINES[$("#contentType").value];
+    contentLineText = line;
+    const [label, ...rest] = line.split("\n");
+    contentLineHtml = `<b>${esc(label)}</b><br>` + rest.map(l=>esc(l)).join("<br>");
+  }
+
+  const headerRow = ["Nr", ...cols.map(c=>c.label)];
+  const bodyRows = state.rows.map((r,i) => [
+    String(i+1),
+    ...cols.map(c => {
+      // Stawka/rate is always left blank in the sent email across all
+      // three shipment types — it's stored on the row for reference but
+      // the real examples never show a value there.
+      if(state.type === "elegant" && c.key === "rate") return "";
+      const v = r[c.key];
+      if(c.key==="qty"||c.key==="price"||c.key==="weight"||c.key==="rate") return v ? fmt(v) : "";
+      return v || "";
+    })
+  ]);
+
+  const sumQty = state.rows.reduce((a,r)=>a+(parseFloat(r.qty)||0),0);
+  const sumPrice = state.rows.reduce((a,r)=>a+(parseFloat(r.price)||0),0);
+  const shipping = parseFloat($("#shippingCost").value)||0;
+  const insurance = parseFloat($("#insuranceCost").value)||0;
+
+  let totalsRow;
+  if(state.type === "elegant"){
+    // matches the real sent example: no weight/material total shown, only qty and price
+    // RAZEM totals only the listed items — shipping/insurance are shown
+    // as separate lines below, since a customs agent reviewing the table
+    // will add those on top; folding them into RAZEM double-counts them.
+    totalsRow = ["", "RAZEM", fmt(sumQty), "", fmt(sumPrice), "", ""];
+  } else {
+    totalsRow = ["", "Razem", fmt(sumQty), "TOTAL", fmt(sumPrice)];
+  }
+
+  // plain-text fallback: padded columns, used only if the paste target
+  // doesn't accept rich HTML (e.g. a plain textarea)
+  const allRows = [headerRow, ...bodyRows, totalsRow];
+  const widths = Array.from({length: headerRow.length}, (_, c) =>
+    Math.max(...allRows.map(r => (r[c] || "").length))
+  );
+  const padRow = (r) => r.map((cell, c) => (cell||"").padEnd(widths[c])).join("  ").trimEnd();
+  let tableText = padRow(headerRow) + "\n";
+  tableText += widths.map(w => "-".repeat(w)).join("--") + "\n";
+  bodyRows.forEach(r => tableText += padRow(r) + "\n");
+  tableText += widths.map(w => "-".repeat(w)).join("--") + "\n";
+  tableText += padRow(totalsRow);
+
+  // real HTML table — this is what actually pastes cleanly into Gmail
+  const th = (c,extra="") => `<th style="border:1px solid #999;padding:4px 8px;background:#e8e8e8;text-align:left;${extra}">${esc(c)}</th>`;
+  const td = (c,extra="") => `<td style="border:1px solid #999;padding:4px 8px;${extra}">${esc(c)}</td>`;
+  let tableHtml = `<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;">`;
+  tableHtml += `<tr>${headerRow.map(c=>th(c)).join("")}</tr>`;
+  bodyRows.forEach(r => {
+    tableHtml += `<tr>${r.map((c,i)=>td(c, i>=2 ? "text-align:right;" : "")).join("")}</tr>`;
+  });
+  tableHtml += `<tr>${totalsRow.map((c,i)=>td(c, "font-weight:bold;background:#f3e7cd;" + (i>=2?"text-align:right;":""))).join("")}</tr>`;
+  tableHtml += `</table>`;
+
+  const grandTotal = fmt(sumPrice + shipping + insurance);
+  const extraLinesText = state.type === "elegant" ? `\nKoszt wysyłki: ${fmt(shipping)}\nUbezpieczenie: ${fmt(insurance)}\nTOTAL with shipping charges: ${grandTotal}\n` : "";
+  const extraLinesHtml = state.type === "elegant" ? `<p>Koszt wysyłki: ${fmt(shipping)}<br>Ubezpieczenie: ${fmt(insurance)}<br><b>TOTAL with shipping charges: ${grandTotal}</b></p>` : "";
+
+  const remarks = $("#remarksField").value.trim();
+  const showMissing = state.type === "india" && $("#cannedMissing").checked;
+  const showDeclaration = $("#cannedDeclaration").checked;
+  const showGia = $("#cannedGia").checked;
+  const signer = $("#signerName").value.trim() || "[Imię i nazwisko]";
+
+  let closingText, closingHtml;
+  if(showGia){
+    closingText = CANNED_GIA;
+    closingHtml = esc(CANNED_GIA).replace(/\n/g,"<br>");
+  } else {
+    closingText = `W razie pytań proszę o kontakt, mailowy lub telefoniczny\n\nPozdrawiam,\n${signer}\nWorld Shiner Polska (Diacrown Sp. z o. o.)`;
+    closingHtml = `W razie pytań proszę o kontakt, mailowy lub telefoniczny<br><br>Pozdrawiam,<br>${esc(signer)}<br>World Shiner Polska (Diacrown Sp. z o. o.)`;
+  }
+
+  // --- assemble plain text (fallback clipboard format) ---
+  let out = "";
+  if(addr) out += `To: ${addr}\n\n`;
+  out += "Dzień dobry,\n\n" + IMPORTER_ADDRESS + "\n\n" + contentLineText + "\n\n";
+  out += PROCEDURE_BLOCK + "\n\n" + LEAD_IN + "\n\n";
+  out += tableText + "\n" + extraLinesText + "\n";
+  if(remarks) out += remarks + "\n\n";
+  if(showMissing) out += CANNED_MISSING + "\n\n";
+  if(showDeclaration) out += CANNED_DECLARATION + "\n\n";
+  out += closingText;
+
+  // --- assemble HTML (primary clipboard format, real table) ---
+  let html = `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5;">`;
+  if(addr) html += `<p><b>To:</b> ${esc(addr)}</p>`;
+  html += `<p>Dzień dobry,</p>`;
+  html += `<p><b>Dane importera/odbiorcy towaru:</b><br>${esc(IMPORTER_ADDRESS.split("\n").slice(1).join("\n")).replace(/\n/g,"<br>")}</p>`;
+  html += `<p>${contentLineHtml}</p>`;
+  html += `<p><b>Przeznaczenie:</b> dalsza odsprzedaż przez nasze przedsiębiorstwo<br><b>Rodzaj odprawy celnej:</b> odprawa w PROCEDURZE DOPUSZCZENIA DO OBROTU Z NALICZENIEM NALEŻNOŚCI CELNYCH I PODATKOWYCH</p>`;
+  html += `<p><b>${esc(LEAD_IN)}</b></p>`;
+  html += tableHtml;
+  html += extraLinesHtml;
+  if(remarks) html += `<p>${esc(remarks).replace(/\n/g,"<br>")}</p>`;
+  if(showMissing) html += `<p>${esc(CANNED_MISSING)}</p>`;
+  if(showDeclaration) html += `<p>${esc(CANNED_DECLARATION).replace(/\n/g,"<br>")}</p>`;
+  html += `<p>${closingHtml}</p>`;
+  html += `</div>`;
+
+  $("#outputBox").innerHTML = html;
+  $("#copyBtn").dataset.text = out;
+  $("#copyBtn").dataset.html = html;
+});
+
+$("#copyBtn").addEventListener("click", async ()=>{
+  const text = $("#copyBtn").dataset.text || $("#outputBox").innerText;
+  const html = $("#copyBtn").dataset.html;
+  const btn = $("#copyBtn");
+  const original = btn.innerText;
+  try{
+    if(html && window.ClipboardItem){
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/html": new Blob([html], {type:"text/html"}),
+          "text/plain": new Blob([text], {type:"text/plain"})
+        })
+      ]);
+    } else {
+      await navigator.clipboard.writeText(text);
+    }
+    btn.innerText = "Copied ✓ (paste into Gmail as a table)";
+  } catch(err){
+    // some browsers block rich clipboard writes outside a user gesture context;
+    // plain text always works as a fallback
+    await navigator.clipboard.writeText(text);
+    btn.innerText = "Copied as plain text";
+  }
+  setTimeout(()=>btn.innerText = original, 2000);
+});
+
+$("#downloadBtn").addEventListener("click", ()=>{
+  const text = $("#copyBtn").dataset.text;
+  if(!text){
+    $("#outputBox").innerHTML = '<p style="color:var(--stamp);">⚠ Generate the email first, then download.</p>';
+    return;
+  }
+  const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `customs-email-${state.type}-${new Date().toISOString().slice(0,10)}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+$("#resetBtn").addEventListener("click", ()=>{
+  if(!confirm("Clear all fields and start a fresh form? This can't be undone.")) return;
+  state.rows = [newRow()];
+  $("#remarksField").value = "";
+  $("#signerName").value = "Weronika Byczenko";
+  $("#elegantContentLines").value = "";
+  $("#indiaInvoiceSum").value = "";
+  $("#indiaAwbValue").value = "";
+  $("#indiaReconResult").innerText = "";
+  $("#indiaReconResult").className = "status-line";
+  $("#shippingCost").value = "0";
+  $("#insuranceCost").value = "0";
+  $("#cannedGia").checked = false;
+  $("#cannedMissing").checked = false;
+  $("#cannedDeclaration").checked = false;
+  $("#rawText").value = "";
+  $("#quickTranslateIn").value = "";
+  $("#quickTranslateOut").value = "";
+  $("#quickTranslateToRemarks").style.display = "none";
+  $("#outputBox").innerHTML = "Fill in the shipment details and line items, then click Generate.";
+  $("#copyBtn").dataset.text = "";
+  $("#copyBtn").dataset.html = "";
+  renderTable();
+});
+
+/* init */
+renderTable();
+</script>
+</body>
+</html>
