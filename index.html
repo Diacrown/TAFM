@@ -1206,6 +1206,17 @@ parseRowsBtn.addEventListener("click", ()=>{
        Natural / Lab-grown / Jewellery shipments. */
     $("#indiaInvoiceSum").value = (appendOn ? prev + cif : cif).toFixed(2);
   }
+
+  // Elegant Collection invoices state Freight/Insurance directly
+  // ("Freight US$. 130.72", "INS US$. 10.00") — pull those instead of
+  // making the user retype numbers that are already on the document.
+  if(state.type === "elegant"){
+    const freightMatch = text.match(/Freight\s*US\$?\.?\s*([\d,]+\.\d+)/i);
+    const insMatch = text.match(/\bINS\s*US\$?\.?\s*([\d,]+\.\d+)/i) || text.match(/Insurance\s*US\$?\.?\s*([\d,]+\.\d+)/i);
+    if(freightMatch) $("#shippingCost").value = freightMatch[1].replace(/,/g,"");
+    if(insMatch) $("#insuranceCost").value = insMatch[1].replace(/,/g,"");
+    updateChecklist();
+  }
   if(awbMatch || cifMatch) checkIndiaRecon();
 
   if(rows){
