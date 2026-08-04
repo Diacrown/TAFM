@@ -63,7 +63,7 @@
   @keyframes stampIn{from{transform:rotate(-8deg) scale(1.35);opacity:0;}to{transform:rotate(-8deg) scale(1);opacity:1;}}
 
   /* ---------- Layout ---------- */
-  .grid{display:grid;grid-template-columns:340px 1fr;gap:22px;}
+  .grid{display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start;}
   @media (max-width:920px){.grid{grid-template-columns:1fr;}}
 
   .panel{
@@ -191,6 +191,16 @@
   .output-box .to-line{color:var(--gold);}
   .copy-row{display:flex;justify-content:flex-end;gap:8px;margin-top:10px;}
   .hint{font-size:11.5px;color:var(--ink-soft);margin-top:8px;}
+  .panel-toggle{
+    cursor:pointer;font-family:'IBM Plex Mono',monospace;
+    font-size:11px;text-transform:uppercase;letter-spacing:0.08em;
+    color:var(--ink-soft);font-weight:600;list-style:none;
+    display:flex;align-items:center;gap:8px;
+  }
+  .panel-toggle::-webkit-details-marker{display:none;}
+  .panel-toggle::before{content:"▸";transition:transform .15s;}
+  details[open] > .panel-toggle::before{transform:rotate(90deg);}
+  .panel-toggle::after{content:"";flex:1;height:1px;background:var(--line);}
 </style>
 </head>
 <body>
@@ -208,7 +218,7 @@
   </div>
 
   <div class="grid">
-    <!-- LEFT COLUMN -->
+    <!-- COLUMN 1: Setup -->
     <div>
       <div class="panel">
         <h2>Shipment type</h2>
@@ -265,6 +275,62 @@
       </div>
 
       <div class="panel">
+        <details>
+          <summary class="panel-toggle">More tools &amp; reference</summary>
+          <div style="margin-top:14px;">
+            <h2>Notes &amp; sign-off</h2>
+            <label class="field"><span>Additional notes / remarks (optional)</span>
+              <textarea id="remarksField" rows="3" placeholder="e.g. explain a value mismatch, or any other note for the courier"></textarea>
+            </label>
+            <label class="field"><span>Your name (for sign-off)</span>
+              <input type="text" id="signerName" value="Weronika Byczenko">
+            </label>
+
+            <h2 style="margin-top:16px;">Canned responses</h2>
+            <div class="canned">
+              <label><input type="checkbox" id="cannedGia"> GIA/carat pushback</label>
+              <label id="cannedMissingWrap" style="display:none;"><input type="checkbox" id="cannedMissing"> Missing invoice note</label>
+              <label><input type="checkbox" id="cannedDeclaration"> Diamond origin declaration (page 2)</label>
+            </div>
+
+            <h2 style="margin-top:16px;">Quick phrase translator</h2>
+            <label class="field"><span>Any English text — a word, a sentence, an agent's question</span>
+              <textarea id="quickTranslateIn" rows="2" placeholder="Paste or type English text here…"></textarea>
+            </label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+              <button class="btn small verdi" id="quickTranslateBtn">Translate →</button>
+              <button class="btn small ghost" id="quickTranslateToRemarks" style="display:none;">Insert into Notes/remarks</button>
+            </div>
+            <textarea id="quickTranslateOut" rows="2" readonly placeholder="Polish draft appears here — always double-check wording before using it."></textarea>
+            <div class="hint">Machine-translated draft, not authoritative — good for a quick starting point, always review before sending.</div>
+
+            <h2 style="margin-top:16px;">Payment rules &amp; escalation</h2>
+            <details>
+              <summary style="cursor:pointer;font-size:12.5px;font-weight:600;">FedEx vs. DHL payment rules</summary>
+              <div class="hint" style="margin-top:8px;">
+                <b>FedEx</b> — tax &gt; 13,000 PLN: pay the Proforma Invoice before release. Tax &lt; 13,000 PLN: goods deliver first, FedEx invoices taxes/duties/fees later.<br><br>
+                <b>DHL</b> — always pre-pay via their online debit-card link before delivery. ⚠️ Double-check the delivery address spelling on the payment page — historically almost always misspelled.
+              </div>
+            </details>
+            <details style="margin-top:10px;">
+              <summary style="cursor:pointer;font-size:12.5px;font-weight:600;">🚨 Non-door-to-door escalation (worst case)</summary>
+              <div class="hint" style="margin-top:8px;">
+                1. Hire an independent customs agent to represent the company before the Customs Office.<br>
+                2. Pay taxes manually from the business bank account, using the dedicated TAX transfer category.<br>
+                3. Wait for the Customs Office to formally clear the package.<br>
+                4. Travel to Wirażowa St. for physical pickup.<br>
+                5. Pay terminal/holding charges on-site to LS Airport Services (~1,200 PLN).<br>
+                6. Settle the agent's separate invoice — typically higher than standard FedEx/DHL clearance rates.
+              </div>
+            </details>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- COLUMN 2: Work area -->
+    <div>
+      <div class="panel">
         <h2>Read from attachment</h2>
         <div class="dropzone" id="dropzone">
           Drop a PDF or image here, or click to choose a file<br>
@@ -282,63 +348,6 @@
         <div class="hint">Digital PDFs are read directly. If a document looks scanned, OCR runs automatically. Row-parsing is a best-effort first pass — always review the table before sending.</div>
       </div>
 
-      <div class="panel">
-        <h2>Notes &amp; sign-off</h2>
-        <label class="field"><span>Additional notes / remarks (optional)</span>
-          <textarea id="remarksField" rows="3" placeholder="e.g. explain a value mismatch, or any other note for the courier"></textarea>
-        </label>
-        <label class="field"><span>Your name (for sign-off)</span>
-          <input type="text" id="signerName" value="Weronika Byczenko">
-        </label>
-      </div>
-
-      <div class="panel">
-        <h2>Quick phrase translator</h2>
-        <label class="field"><span>Any English text — a word, a sentence, an agent's question</span>
-          <textarea id="quickTranslateIn" rows="3" placeholder="Paste or type English text here…"></textarea>
-        </label>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-          <button class="btn small verdi" id="quickTranslateBtn">Translate →</button>
-          <button class="btn small ghost" id="quickTranslateToRemarks" style="display:none;">Insert into Notes/remarks</button>
-        </div>
-        <textarea id="quickTranslateOut" rows="3" readonly placeholder="Polish draft appears here — always double-check wording before using it."></textarea>
-        <div class="hint">Machine-translated draft, not authoritative — good for a quick starting point on wording that isn't part of the fixed templates, but always review before sending.</div>
-      </div>
-
-      <div class="panel">
-        <h2>Canned responses</h2>
-        <div class="canned">
-          <label><input type="checkbox" id="cannedGia"> GIA/carat pushback</label>
-          <label id="cannedMissingWrap" style="display:none;"><input type="checkbox" id="cannedMissing"> Missing invoice note</label>
-          <label><input type="checkbox" id="cannedDeclaration"> Diamond origin declaration (page 2 of invoice)</label>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h2>Reference — payment rules &amp; escalation</h2>
-        <details>
-          <summary style="cursor:pointer;font-size:12.5px;font-weight:600;">FedEx vs. DHL payment rules</summary>
-          <div class="hint" style="margin-top:8px;">
-            <b>FedEx</b> — tax &gt; 13,000 PLN: pay the Proforma Invoice before release. Tax &lt; 13,000 PLN: goods deliver first, FedEx invoices taxes/duties/fees later.<br><br>
-            <b>DHL</b> — always pre-pay via their online debit-card link before delivery. ⚠️ Double-check the delivery address spelling on the payment page — historically almost always misspelled.
-          </div>
-        </details>
-        <details style="margin-top:10px;">
-          <summary style="cursor:pointer;font-size:12.5px;font-weight:600;">🚨 Non-door-to-door escalation (worst case)</summary>
-          <div class="hint" style="margin-top:8px;">
-            1. Hire an independent customs agent to represent the company before the Customs Office.<br>
-            2. Pay taxes manually from the business bank account, using the dedicated TAX transfer category.<br>
-            3. Wait for the Customs Office to formally clear the package.<br>
-            4. Travel to Wirażowa St. for physical pickup.<br>
-            5. Pay terminal/holding charges on-site to LS Airport Services (~1,200 PLN).<br>
-            6. Settle the agent's separate invoice — typically higher than standard FedEx/DHL clearance rates.
-          </div>
-        </details>
-      </div>
-    </div>
-
-    <!-- RIGHT COLUMN -->
-    <div>
       <div class="panel">
         <h2>Line items</h2>
         <div class="toolbar">
@@ -361,7 +370,7 @@
       <div class="panel">
         <h2>Generated email</h2>
         <div class="checklist" id="readinessChecklist"></div>
-        <button class="btn stamp" id="generateBtn" style="margin-bottom:12px;">Generate email text</button>
+        <button class="btn stamp" id="generateBtn" style="margin-bottom:12px;width:100%;">Generate email text</button>
         <div class="output-box" id="outputBox">Fill in the shipment details and line items, then click Generate.</div>
         <div class="copy-row">
           <button class="btn ghost small" id="downloadBtn">Download as .txt</button>
@@ -426,12 +435,29 @@ const DICTIONARY = {
 /* Metal / purity marks -> the exact Polish material phrasing used in past
    replies (e.g. "Złoto próby 585 (14K)", "Platyna PT950"). Keyed on the
    raw token as it appears on Indian jewellery invoices ("14K", "Platinum", ...). */
+/* Two different phrasings for the same metal, matching the two contexts
+   real sent emails actually use them in:
+   - Materiał COLUMN value: simple form ("Złoto próby 14K")
+   - Opis PHRASE (item description / content-line summary): fuller
+     genitive form with fineness ("złota próby 585 (14K) wysadzana...") */
 const METAL_MAP = {
-  "14k":"Złoto próby 585 (14K)","14kt":"Złoto próby 585 (14K)",
-  "18k":"Złoto próby 750 (18K)","18kt":"Złoto próby 750 (18K)",
-  "9k":"Złoto próby 375 (9K)","10k":"Złoto próby 417 (10K)",
+  "14k":"Złoto próby 14K","14kt":"Złoto próby 14K",
+  "18k":"Złoto próby 18K","18kt":"Złoto próby 18K",
+  "9k":"Złoto próby 9K","10k":"Złoto próby 10K",
   "platinum":"Platyna PT950","pt950":"Platyna PT950","950":"Platyna PT950",
   "silver":"Srebro próby 925","925":"Srebro próby 925"
+};
+const METAL_CONTENT_PHRASE = {
+  "14k":"złota próby 585 (14K)","14kt":"złota próby 585 (14K)",
+  "18k":"złota próby 750 (18K)","18kt":"złota próby 750 (18K)",
+  "9k":"złota próby 375 (9K)","10k":"złota próby 417 (10K)",
+  "platinum":"platyny próby 950","pt950":"platyny próby 950","950":"platyny próby 950",
+  "silver":"srebra próby 925","925":"srebra próby 925"
+};
+const JEWELRY_TYPE_PL = {
+  ring:"pierścionek", earring:"kolczyki", earrings:"kolczyki",
+  necklace:"naszyjnik", bracelet:"bransoletka", pendant:"zawieszka",
+  chain:"łańcuszek", bangle:"bransoleta sztywna", stud:"wkrętki", studs:"wkrętki"
 };
 
 /* Bangkok stone-name lookup used specifically inside the parenthetical
@@ -550,8 +576,7 @@ const COLUMNS = {
   ],
   elegant: [
     {key:"desc", label:"Opis (translated)", type:"text"},
-    {key:"qty", label:"Ilość (szt/pary)", type:"num"},
-    {key:"rate", label:"Stawka $/szt", type:"num"},
+    {key:"qty", label:"Ilość (szt)", type:"num"},
     {key:"price", label:"Cena US$", type:"num"},
     {key:"weight", label:"Waga (gram)", type:"num"},
     {key:"material", label:"Materiał", type:"text"}
@@ -619,7 +644,9 @@ function renderTable(){
   const sumWeight = state.rows.reduce((a,r)=>a+(parseFloat(r.weight)||0),0);
 
   if(state.type === "elegant"){
-    itemsTotals.innerHTML = `<td></td><td>RAZEM</td><td>${fmt(sumQty)}</td><td></td><td>${fmt(sumPrice)}</td><td>${fmt(sumWeight)}</td><td></td><td></td>`;
+    const shipping = parseFloat($("#shippingCost")?.value)||0;
+    const insurance = parseFloat($("#insuranceCost")?.value)||0;
+    itemsTotals.innerHTML = `<td></td><td>RAZEM</td><td>${fmt(sumQty)}</td><td>${fmt(sumPrice+shipping+insurance)}</td><td>${fmt(sumWeight)}</td><td></td><td></td>`;
     $("#elegantExtras").style.display = "grid";
   } else {
     itemsTotals.innerHTML = `<td></td><td>Razem</td><td>${fmt(sumQty)}</td><td>TOTAL</td><td>${fmt(sumPrice)}</td><td></td>`;
@@ -663,7 +690,9 @@ function updateTotalsOnly(){
   const sumPrice = state.rows.reduce((a,r)=>a+(parseFloat(r.price)||0),0);
   const sumWeight = state.rows.reduce((a,r)=>a+(parseFloat(r.weight)||0),0);
   if(state.type === "elegant"){
-    itemsTotals.innerHTML = `<td></td><td>RAZEM</td><td>${fmt(sumQty)}</td><td></td><td>${fmt(sumPrice)}</td><td>${fmt(sumWeight)}</td><td></td><td></td>`;
+    const shipping = parseFloat($("#shippingCost")?.value)||0;
+    const insurance = parseFloat($("#insuranceCost")?.value)||0;
+    itemsTotals.innerHTML = `<td></td><td>RAZEM</td><td>${fmt(sumQty)}</td><td>${fmt(sumPrice+shipping+insurance)}</td><td>${fmt(sumWeight)}</td><td></td><td></td>`;
   } else {
     itemsTotals.innerHTML = `<td></td><td>Razem</td><td>${fmt(sumQty)}</td><td>TOTAL</td><td>${fmt(sumPrice)}</td><td></td>`;
   }
@@ -888,14 +917,21 @@ async function handleFile(file){
       setStatus("Reading PDF…", "busy");
       const buf = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({data:buf}).promise;
-      let text = "";
-      let firstPageCanvas = null;
+      const pageTexts = [];
+      let ocrPageCount = 0;
+      /* Check and OCR EVERY page independently, not just the first one.
+         A bundled multi-invoice PDF (e.g. several Elegant Collection
+         invoices in one file) very often mixes page types — a digital
+         cover page followed by scanned invoice pages further in, or the
+         reverse. OCR'ing only page 1 silently drops every later page's
+         content, which is exactly where the actual line-item tables
+         tend to live in a multi-invoice bundle. */
       for(let p=1; p<=pdf.numPages; p++){
         const page = await pdf.getPage(p);
         const content = await page.getTextContent();
-        /* Reconstruct visual reading order: PDFs can store text items in
-           any internal order, so sort by y (top→bottom), group items within
-           ~4px vertical tolerance into one line, then sort each line by x. */
+        // Reconstruct visual reading order: PDFs can store text items in
+        // any internal order, so sort by y (top→bottom), group items
+        // within ~4px vertical tolerance into one line, then sort by x.
         const items = content.items
           .filter(i=>i.str.trim().length)
           .map(i=>({ str:i.str, x:i.transform[4], y:i.transform[5] }))
@@ -906,27 +942,29 @@ async function handleFile(file){
           if(last && Math.abs(last.y - it.y) < 4){ last.items.push(it); }
           else linesArr.push({ y: it.y, items:[it] });
         }
-        const pageText = linesArr
+        let pageText = linesArr
           .map(l => l.items.sort((a,b)=>a.x-b.x).map(i=>i.str).join(" "))
           .join("\n");
-        text += pageText + "\n";
-        if(p===1 && pageText.trim().length < 20){
+
+        if(pageText.trim().length < 20){
+          setStatus(`Page ${p}/${pdf.numPages} looks scanned — running OCR…`, "busy");
           const viewport = page.getViewport({scale:3});
           const canvas = document.createElement("canvas");
           canvas.width = viewport.width; canvas.height = viewport.height;
           await page.render({canvasContext:canvas.getContext("2d"), viewport}).promise;
-          firstPageCanvas = canvas;
+          const {data:{text:ocrText}} = await Tesseract.recognize(canvas, "eng+pol");
+          pageText = ocrText;
+          ocrPageCount++;
         }
+        pageTexts.push(pageText);
       }
-      if(text.trim().length < 20 && firstPageCanvas){
-        setStatus("No text layer found — this looks scanned. Running OCR…", "busy");
-        const {data:{text:ocrText}} = await Tesseract.recognize(firstPageCanvas, "eng+pol");
-        rawText.value = ocrText;
-        setStatus("OCR complete — review extracted text, then parse rows.", "ok");
-      } else {
-        rawText.value = text;
-        setStatus("Digital PDF read successfully.", "ok");
-      }
+      rawText.value = pageTexts.join("\n\n");
+      setStatus(
+        ocrPageCount > 0
+          ? `Read ${pdf.numPages} page(s) — OCR ran on ${ocrPageCount} of them.`
+          : `Read ${pdf.numPages} page(s) — all digital text, no OCR needed.`,
+        "ok"
+      );
     } else {
       setStatus("Running OCR on image…", "busy");
       const {data:{text:ocrText}} = await Tesseract.recognize(file, "eng+pol");
@@ -1138,6 +1176,165 @@ function parseElegantList(text){
   return rows.length ? rows : null;
 }
 
+/* Packing-list SUMMARY format — the "As per Attached List" page some
+   Elegant Collection invoices include, structured as SrNo / HSN /
+   Description / Item / GrossWt / Qty / Value. Unlike the detailed
+   per-piece LIST OF ITEMS, this format is already pre-aggregated by the
+   exporter (e.g. "24 PCS" on one line for 24 identical rings, not 24
+   separate lines) — so no grouping/summing needs to happen here, only
+   correct extraction and translation of each already-summarized row.
+   Tried before the detailed parser since it's the more reliable source
+   when both are present in a document. */
+/* Colored-stone name -> Polish plural instrumental form, used only to
+   DETECT that a piece is set with a colored stone (via the packing
+   list's Remarks column, e.g. "BLUE SAPPHIRE COLOR") — the final
+   description always says the generic "kamieniami kolorowymi", never
+   the specific gem, matching real sent examples. */
+const COLOR_STONE_KEYS = ["sapphire","ruby","emerald","aquamarine","tanzanite","tourmaline","morganite","spinel","garnet","topaz","amethyst","citrine","peridot","zircon","iolite","kunzite"];
+
+function classifyStone(remarks){
+  if(!remarks) return {type:"natural"};
+  for(const key of COLOR_STONE_KEYS){
+    if(new RegExp("\\b"+key+"\\b","i").test(remarks)) return {type:"colored"};
+  }
+  if(/\bLGD\b/i.test(remarks)) return {type:"labgrown"};
+  return {type:"natural"};
+}
+
+function buildElegantGroupDesc(materialKey, stoneType, isSemiMount){
+  if(isSemiMount){
+    return 'Biżuteria typu "semi-mount" (półfabrykaty) z ' + METAL_CONTENT_PHRASE.platinum + ' częściowo wysadzana diamentami';
+  }
+  const isGold = /k$/i.test(materialKey) && materialKey.toLowerCase() !== "pt950";
+  const metalPhrase = METAL_CONTENT_PHRASE[materialKey.toLowerCase()] || METAL_CONTENT_PHRASE.platinum;
+  const prep = isGold ? "ze" : "z";
+  let stonePhrase;
+  if(stoneType === "colored") stonePhrase = "kamieniami kolorowymi" + (isGold ? " naturalnymi" : "");
+  else if(stoneType === "labgrown") stonePhrase = "diamentami" + (isGold ? " laboratoryjnymi" : "");
+  else stonePhrase = "diamentami" + (isGold ? " naturalnymi" : "");
+  return `Biżuteria ${prep} ${metalPhrase} wysadzana ${stonePhrase}`;
+}
+
+/* Cross-references two pages many real Elegant Collection PDFs include:
+   the detailed "LIST OF ITEMS" (one row per individual piece, with
+   material but no stone-type detail) and the "PACKING LIST" (per-style
+   Remarks text that DOES state stone type — a color name, "LGD", or
+   implicitly natural via "MINED" + a clarity grade). Grouping the
+   itemized rows by (material, stone type, jewelry type) — using the
+   Remarks lookup to classify each piece — reproduces the same compact
+   summary the exporter's own invoice shows, without needing that
+   summary page to exist or to state material per line (it often
+   doesn't). Tried first since it's the most accurate source when both
+   pages are present; validated exactly against two real documents. */
+function parseElegantListWithPackingList(text){
+  const styleRemarks = {};
+  const packRe = /^\s*(\S+)\s+.+?\s+(\S+\*)\s+\d+\s*[Xx]\s*\d+\s+\d+\s+([\s\S]*?)\n\s*Sub Total/gm;
+  let pm;
+  while((pm = packRe.exec(text)) !== null){
+    const remarks = pm[3].replace(/\s+/g," ").trim();
+    if(pm[1] && remarks) styleRemarks[pm[1]] = remarks;
+  }
+  if(Object.keys(styleRemarks).length === 0) return null; // no packing list present
+
+  const itemRe = /^\s*\d+\s+(\S+)\s+(Ring|Earrings?|Necklace|Bracelet|Pendant|Chain|Bangle|Studs?)\s+(\S+\*)\s+(\d+)\s+([\d.]+)\s+(14K|18K|9K|10K|Platinum|PT950|Silver)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s*$/gim;
+  const items = [];
+  let im;
+  while((im = itemRe.exec(text)) !== null){
+    items.push({
+      styleNo: im[1], itemType: im[2], qty: parseFloat(im[4]),
+      weight: parseFloat(im[5]), material: im[6],
+      price: parseFloat(im[8].replace(/,/g,""))
+    });
+  }
+  if(!items.length) return null;
+
+  const groups = {};
+  for(const item of items){
+    const remarks = styleRemarks[item.styleNo] || "";
+    const isSemiMount = /SEMI\s*MTG|SEMI\s*MOUNT/i.test(remarks);
+    const {type} = classifyStone(remarks);
+    const key = [item.material.toLowerCase(), isSemiMount ? "semimount" : type, item.itemType.toLowerCase()].join("|");
+    if(!groups[key]) groups[key] = { material:item.material, stoneType:type, isSemiMount, itemType:item.itemType, qty:0, weight:0, price:0 };
+    groups[key].qty += item.qty;
+    groups[key].weight += item.weight;
+    groups[key].price += item.price;
+  }
+
+  const groupList = Object.values(groups);
+  const multi = groupList.length > 1;
+  return groupList.map(g => {
+    let desc = buildElegantGroupDesc(g.material, g.stoneType, g.isSemiMount);
+    const jType = JEWELRY_TYPE_PL[g.itemType.toLowerCase()] || g.itemType.toLowerCase();
+    if(multi) desc += ` (${jType})`;
+    return newRow({
+      desc, qty: g.qty.toFixed(2), price: g.price.toFixed(2), weight: g.weight.toFixed(3),
+      material: g.isSemiMount ? METAL_MAP.platinum : (METAL_MAP[g.material.toLowerCase()] || g.material),
+      matched: true
+    });
+  });
+}
+
+function parseElegantSummaryList(text){
+  const jewelryNounRe = /(Ring|Earrings?|Necklace|Bracelet|Pendant|Chain|Bangle|Studs?)\b/i;
+  const materialRe = /\b(Gold|Platinum)\b/i;
+  const stoneRe = /\b(LGD|Diamonds?|Dia|Colou?r(?:ed)?\s*Stones?)\b/i;
+  const semiMountRe = /Semi\s*Mount/i;
+  // invoice-level fallback signal when no per-row LGD marker is present
+  const labGrownInvoice = /LAB\s*GROWN/i.test(text);
+
+  const lines = text.split("\n").map(l => l.replace(/[|{}\[\]]+/g, " ").replace(/\s{2,}/g," ").trim());
+  const rows = [];
+  for(const line of lines){
+    const nounM = line.match(jewelryNounRe);
+    if(!nounM) continue;
+    const before = line.slice(0, nounM.index);
+    const after = line.slice(nounM.index + nounM[0].length);
+    const materialM = before.match(materialRe);
+    if(!materialM) continue;
+    const stoneM = before.match(stoneRe);
+    const isSemiMount = semiMountRe.test(before) || semiMountRe.test(after);
+    const nums = after.match(/[\d,]+\.?\d*/g);
+    if(!nums || nums.length < 3) continue;
+
+    const weight = normalizeWeight(nums[0]);
+    const qty = normalizeNum(nums[1]);
+    const price = normalizeNum(nums[nums.length-1]);
+
+    const isGold = materialM[1].toLowerCase() === "gold";
+    const isColorStone = stoneM && /colo/i.test(stoneM[0]);
+    // an explicit per-row "LGD" marker is a stronger signal than the
+    // invoice-level header text, so it's checked first
+    const isLabGrown = (stoneM && /LGD/i.test(stoneM[0])) || labGrownInvoice;
+    /* Observed real-world convention (from two matched sent examples):
+       the natural/lab-grown qualifier is only ever added to GOLD items —
+       this business's platinum line is always natural, so it's never
+       stated explicitly, while gold comes in both varieties and needs
+       the disambiguation. */
+    const originQualifier = isGold ? (isLabGrown ? "laboratoryjnymi" : "naturalnymi") : "";
+
+    let desc;
+    if(isSemiMount){
+      desc = 'Biżuteria typu "semi-mount" (półfabrykaty) z platyny próby 950 częściowo wysadzana diamentami';
+    } else if(isGold){
+      const stonePhrase = isColorStone
+        ? `kamieniami kolorowymi ${originQualifier}`.trim()
+        : `diamentami ${originQualifier}`.trim();
+      desc = `Biżuteria ze ${METAL_CONTENT_PHRASE["14k"]} wysadzana ${stonePhrase}`;
+    } else {
+      desc = `Biżuteria z ${METAL_CONTENT_PHRASE["platinum"]} wysadzana diamentami`;
+    }
+
+    const jewelryType = JEWELRY_TYPE_PL[nounM[1].toLowerCase()] || nounM[1].toLowerCase();
+    rows.push(newRow({
+      desc, qty, weight, price,
+      material: isSemiMount || !isGold ? METAL_MAP.platinum : METAL_MAP["14k"],
+      jewelryType,
+      matched: true
+    }));
+  }
+  return rows.length ? rows : null;
+}
+
 /* Generic last-resort guesser: looks for lines ending in numeric tokens.
    Deliberately conservative — kept as the fallback when none of the
    known formats above match, so the table is always editable after. */
@@ -1180,18 +1377,19 @@ function parseGeneric(text){
    reconciliation fields when present in the text. */
 parseRowsBtn.addEventListener("click", ()=>{
   const text = rawText.value;
-  const byType = { bangkok: parseBangkokCI, india: parseIndiaTaxInvoice, elegant: parseElegantList };
+  const byType = {
+    bangkok: parseBangkokCI,
+    india: parseIndiaTaxInvoice,
+    elegant: (t) => parseElegantListWithPackingList(t) || parseElegantSummaryList(t) || parseElegantList(t)
+  };
   let rows = byType[state.type] ? byType[state.type](text) : null;
-  let usedOtherFormat = false;
-  if(!rows){
-    /* Try the other two known layouts in case the source picker didn't
-       match the tab, but never fall back to a loose guess — on OCR'd
-       text a loose guess reliably turns tracking numbers, phone numbers,
-       and address fragments into fake rows, which is worse than no
-       rows at all. Only the three validated column formats auto-fill. */
-    rows = parseBangkokCI(text) || parseIndiaTaxInvoice(text) || parseElegantList(text);
-    if(rows) usedOtherFormat = true;
-  }
+  /* Never fall back to a DIFFERENT shipment type's parser. Doing so
+     silently applies the wrong business template — e.g. India's
+     "Kamienie szlachetne, cięte i polerowane (X)" phrasing appearing on
+     an Elegant Collection invoice, with weight/material left blank
+     because India's format doesn't have those fields. A parser that
+     doesn't match the current tab should mean "no rows", prompting
+     manual entry — never a plausible-looking wrong answer. */
 
   const appendOn = $("#appendMode").checked;
 
@@ -1226,12 +1424,22 @@ parseRowsBtn.addEventListener("click", ()=>{
     } else {
       state.rows = rows;
     }
+    /* For Elegant Collection, add the jewelry-type parenthetical only
+       when there's more than one row to disambiguate — a single-item
+       shipment doesn't need it (matches real sent examples exactly:
+       the 1-row invoice omits it, the 7-row invoice includes it on
+       every line since several rows would otherwise read identically). */
+    if(state.type === "elegant" && state.rows.length > 1){
+      state.rows.forEach(r=>{
+        if(r.jewelryType && !r.desc.includes(`(${r.jewelryType})`)){
+          r.desc = `${r.desc} (${r.jewelryType})`;
+        }
+      });
+    }
     setStatus(
-      (usedOtherFormat
-        ? `Parsed ${rows.length} row(s) — matched a different shipment type's layout than the selected tab, please confirm that's expected.`
-        : `Parsed ${rows.length} row(s) from the recognized invoice layout — please review.`) +
-        (appendOn && hadRealRows ? ` Added to existing table (${state.rows.length} total).` : ""),
-      usedOtherFormat ? "warn" : "ok"
+      `Parsed ${rows.length} row(s) from the recognized invoice layout — please review.` +
+      (appendOn && hadRealRows ? ` Added to existing table (${state.rows.length} total).` : ""),
+      "ok"
     );
   } else {
     setStatus("Couldn't recognize this invoice's layout — no rows auto-filled. Enter the line(s) manually below (usually quicker than fixing a bad OCR guess).", "warn");
@@ -1326,9 +1534,8 @@ $("#generateBtn").addEventListener("click", ()=>{
   tableHtml += `<tr>${totalsRow.map((c,i)=>td(c, "font-weight:bold;background:#f3e7cd;" + (i>=2?"text-align:right;":""))).join("")}</tr>`;
   tableHtml += `</table>`;
 
-  const grandTotal = fmt(sumPrice + shipping + insurance);
-  const extraLinesText = state.type === "elegant" ? `\nKoszt wysyłki: ${fmt(shipping)}\nUbezpieczenie: ${fmt(insurance)}\nTOTAL with shipping charges: ${grandTotal}\n` : "";
-  const extraLinesHtml = state.type === "elegant" ? `<p>Koszt wysyłki: ${fmt(shipping)}<br>Ubezpieczenie: ${fmt(insurance)}<br><b>TOTAL with shipping charges: ${grandTotal}</b></p>` : "";
+  const extraLinesText = state.type === "elegant" ? `\nKoszt wysyłki: ${fmt(shipping)}\nUbezpieczenie: ${fmt(insurance)}\n` : "";
+  const extraLinesHtml = state.type === "elegant" ? `<p>Koszt wysyłki: ${fmt(shipping)}<br>Ubezpieczenie: ${fmt(insurance)}</p>` : "";
 
   const remarks = $("#remarksField").value.trim();
   const showMissing = state.type === "india" && $("#cannedMissing").checked;
