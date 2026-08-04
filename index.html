@@ -154,6 +154,7 @@
   .badge-nomatch{font-size:9.5px;color:var(--stamp);font-family:'IBM Plex Mono',monospace;display:block;margin-top:2px;}
   .badge-grading{font-size:9.5px;color:var(--verdigris);font-family:'IBM Plex Mono',monospace;display:block;margin-top:2px;}
   .badge-draft{font-size:9.5px;color:var(--gold);font-family:'IBM Plex Mono',monospace;display:block;margin-top:2px;}
+  .badge-learned{font-size:9.5px;color:var(--verdigris);font-family:'IBM Plex Mono',monospace;display:block;margin-top:2px;}
   .checklist{margin-bottom:12px;font-size:12px;}
   .checklist-item{display:flex;align-items:center;gap:6px;padding:3px 0;color:var(--ink-soft);}
   .checklist-item.ok{color:var(--verdigris);}
@@ -253,6 +254,8 @@
           <textarea id="elegantContentLines" rows="4" placeholder="One line per material type, e.g. Biżuteria ze złota próby 585 (14K) wysadzana diamentami"></textarea>
           <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
             <button type="button" class="btn small ghost" data-insert-phrase="gold14">+ Gold 14K/diamonds</button>
+            <button type="button" class="btn small ghost" data-insert-phrase="gold14lab">+ Gold 14K/diamonds (lab-grown)</button>
+            <button type="button" class="btn small ghost" data-insert-phrase="gold14natural">+ Gold 14K/diamonds (natural)</button>
             <button type="button" class="btn small ghost" data-insert-phrase="gold14mixed">+ Gold 14K/diamonds+colored</button>
             <button type="button" class="btn small ghost" data-insert-phrase="basemetal">+ Base metal/zirconia</button>
             <button type="button" class="btn small ghost" data-insert-phrase="platinum">+ Platinum 950/diamonds</button>
@@ -293,7 +296,7 @@
               <label><input type="checkbox" id="cannedDeclaration"> Diamond origin declaration (page 2)</label>
             </div>
 
-            <h2 style="margin-top:16px;">Quick phrase translator</h2>
+            <h2 style="margin-top:16px;">Quick phrase translator &amp; dictionary</h2>
             <label class="field"><span>Any English text — a word, a sentence, an agent's question</span>
               <textarea id="quickTranslateIn" rows="2" placeholder="Paste or type English text here…"></textarea>
             </label>
@@ -301,8 +304,18 @@
               <button class="btn small verdi" id="quickTranslateBtn">Translate →</button>
               <button class="btn small ghost" id="quickTranslateToRemarks" style="display:none;">Insert into Notes/remarks</button>
             </div>
-            <textarea id="quickTranslateOut" rows="2" readonly placeholder="Polish draft appears here — always double-check wording before using it."></textarea>
-            <div class="hint">Machine-translated draft, not authoritative — good for a quick starting point, always review before sending.</div>
+            <label class="field"><span>Polish (edit to correct, then save so it's remembered)</span>
+              <textarea id="quickTranslateOut" rows="2" placeholder="Polish draft appears here — edit if needed, then Save to keep it for next time."></textarea>
+            </label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+              <button class="btn small" id="quickTranslateSaveBtn">💾 Save to dictionary</button>
+            </div>
+            <div class="hint">Saved terms are remembered in this browser and used automatically on every future invoice — the dictionary keeps growing as new terms come up, it's never re-taught from scratch.</div>
+
+            <details style="margin-top:12px;">
+              <summary style="cursor:pointer;font-size:12.5px;font-weight:600;">Your saved dictionary (<span id="learnedCount">0</span> terms)</summary>
+              <div id="learnedTermsList" style="margin-top:8px;max-height:220px;overflow:auto;"></div>
+            </details>
 
             <h2 style="margin-top:16px;">Payment rules &amp; escalation</h2>
             <details>
@@ -388,6 +401,113 @@
    Translation dictionary (English gem/material term -> Polish)
    Extend this list as new terms come up in real invoices.
 --------------------------------------------------------------- */
+/* -----------------------------------------------------------------
+   Learned dictionary: terms the user has taught the app, shared across
+   every device/browser via a Firestore document (free tier), so the
+   whole team benefits from what any one of them teaches it. Talks to
+   Firestore's REST API directly with fetch — no SDK/build step needed,
+   keeps this a single file. localStorage is kept as an instant local
+   cache: reads are fast and work offline, writes go to both places,
+   and if Firestore is ever unreachable the app still works from the
+   last-synced local copy.
+
+   IMPORTANT: FIREBASE_PROJECT_ID and FIREBASE_API_KEY must be set to a
+   real project before this does anything shared — until then it
+   quietly falls back to a local-only dictionary, so nothing breaks in
+   the meantime. The API key is meant to be public (Firestore access is
+   controlled by security rules, not by keeping this secret) — but the
+   security rule MUST scope write access narrowly to this one document,
+   never to the whole database. See the manual for the exact rule.
+----------------------------------------------------------------- */
+const FIREBASE_PROJECT_ID = ""; // e.g. "customs-composer-12345"
+const FIREBASE_API_KEY = "";    // Web API key from Firebase project settings
+const FIRESTORE_DOC_PATH = "customsComposer/learnedDictionary";
+const FIRESTORE_URL = FIREBASE_PROJECT_ID
+  ? `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${FIRESTORE_DOC_PATH}?key=${FIREBASE_API_KEY}`
+  : "";
+
+const LEARNED_KEY = "customsComposerLearnedTerms";
+let LEARNED_TERMS = {};
+let learnedSyncStatus = "local"; // "local" | "synced" | "offline"
+
+try{
+  const cached = localStorage.getItem(LEARNED_KEY);
+  if(cached) LEARNED_TERMS = JSON.parse(cached);
+} catch(err){ console.warn("Local dictionary cache unavailable:", err); }
+
+function cacheLearnedTermsLocally(){
+  try{ localStorage.setItem(LEARNED_KEY, JSON.stringify(LEARNED_TERMS)); }
+  catch(err){ console.warn("Couldn't cache dictionary locally:", err); }
+}
+
+// Firestore stores fields as typed values, e.g. {"stringValue": "..."}
+// rather than plain JSON — these convert a flat {term: translation}
+// object to and from that shape.
+function toFirestoreMap(obj){
+  const fields = {};
+  for(const k of Object.keys(obj)) fields[k] = { stringValue: obj[k] };
+  return { fields: { terms: { mapValue: { fields } } } };
+}
+function fromFirestoreMap(doc){
+  const fields = doc?.fields?.terms?.mapValue?.fields || {};
+  const out = {};
+  for(const k of Object.keys(fields)) out[k] = fields[k].stringValue || "";
+  return out;
+}
+
+async function fetchSharedDictionary(){
+  if(!FIRESTORE_URL) return;
+  try{
+    const res = await fetch(FIRESTORE_URL);
+    if(res.status === 404){
+      // document doesn't exist yet — first run, nothing to merge
+      learnedSyncStatus = "synced";
+      return;
+    }
+    if(!res.ok) throw new Error("bad response " + res.status);
+    const doc = await res.json();
+    const remote = fromFirestoreMap(doc);
+    // merge rather than overwrite: anything learned locally while
+    // offline is preserved alongside whatever the shared store has
+    LEARNED_TERMS = Object.assign({}, remote, LEARNED_TERMS);
+    cacheLearnedTermsLocally();
+    learnedSyncStatus = "synced";
+  } catch(err){
+    console.warn("Shared dictionary unreachable, using local cache:", err);
+    learnedSyncStatus = "offline";
+  }
+}
+
+async function pushSharedDictionary(){
+  cacheLearnedTermsLocally(); // local cache always updates immediately
+  if(!FIRESTORE_URL) return;
+  try{
+    const res = await fetch(FIRESTORE_URL, {
+      method: "PATCH",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(toFirestoreMap(LEARNED_TERMS))
+    });
+    if(!res.ok) throw new Error("bad response " + res.status);
+    learnedSyncStatus = "synced";
+  } catch(err){
+    console.warn("Couldn't sync to shared dictionary, saved locally only:", err);
+    learnedSyncStatus = "offline";
+  }
+}
+
+function learnTerm(english, polish){
+  const key = english.trim().toLowerCase();
+  if(!key || !polish.trim()) return false;
+  LEARNED_TERMS[key] = polish.trim();
+  cacheLearnedTermsLocally();
+  return true;
+}
+
+function forgetTerm(english){
+  delete LEARNED_TERMS[english];
+  pushSharedDictionary();
+}
+
 const DICTIONARY = {
   "sapphire":"Szafir","sapphires":"Szafiry",
   "ruby":"Rubin","rubies":"Rubiny",
@@ -605,15 +725,22 @@ const GRADING_RE = /\b(FL|IF|VVS1|VVS2|VS1|VS2|SI1|SI2|SI3|I1|I2|I3|D\/Cut|Fancy
 
 function autoTranslate(text){
   if(!text) return {out:"", matched:null};
+  // an exact learned phrase (the whole field, not a substring) is the
+  // strongest signal — the user taught this precise term before
+  const exactLearned = LEARNED_TERMS[text.trim().toLowerCase()];
+  if(exactLearned) return {out: exactLearned, matched: "learned"};
+
   let matchedAny = false;
   let out = text;
-  // longest keys first so multi-word terms match before single words
-  const keys = Object.keys(DICTIONARY).sort((a,b)=>b.length-a.length);
+  // learned terms + built-in dictionary, longest keys first so
+  // multi-word terms match before single words
+  const merged = Object.assign({}, DICTIONARY, LEARNED_TERMS);
+  const keys = Object.keys(merged).sort((a,b)=>b.length-a.length);
   for(const key of keys){
     const re = new RegExp("\\b"+key.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')+"\\b","gi");
     if(re.test(out)){
-      out = out.replace(re, DICTIONARY[key]);
-      matchedAny = true;
+      out = out.replace(re, merged[key]);
+      matchedAny = LEARNED_TERMS[key] ? "learned" : true;
     }
   }
   if(!matchedAny && GRADING_RE.test(text)) matchedAny = "grading";
@@ -631,7 +758,7 @@ function renderTable(){
     cols.forEach(c=>{
       const val = row[c.key] ?? "";
       const cls = c.key === "desc" ? "desc-cell" : "";
-      cells += `<td class="${cls}"><input data-row="${row.id}" data-key="${c.key}" type="${c.type==='num'?'text':'text'}" value="${val.toString().replace(/"/g,'&quot;')}">${(c.key==='desc' && row.matched===false)?'<span class="badge-nomatch">no dictionary match — check translation</span>':''}${(c.key==='desc' && row.matched==='grading')?'<span class="badge-grading">grading code — left as international shorthand</span>':''}${(c.key==='desc' && row.matched==='draft')?'<span class="badge-draft">machine-translated draft — verify wording</span>':''}</td>`;
+      cells += `<td class="${cls}"><input data-row="${row.id}" data-key="${c.key}" type="${c.type==='num'?'text':'text'}" value="${val.toString().replace(/"/g,'&quot;')}">${(c.key==='desc' && row.matched===false)?`<span class="badge-nomatch">no dictionary match — check translation <a href="#" data-teach="${row.id}" style="color:inherit;">(teach it →)</a></span>`:''}${(c.key==='desc' && row.matched==='grading')?'<span class="badge-grading">grading code — left as international shorthand</span>':''}${(c.key==='desc' && row.matched==='draft')?`<span class="badge-draft">machine-translated draft — verify wording <a href="#" data-teach="${row.id}" style="color:inherit;">(save →)</a></span>`:''}${(c.key==='desc' && row.matched==='learned')?'<span class="badge-learned">from your saved dictionary</span>':''}</td>`;
     });
     cells += `<td class="row-actions"><button class="icon-btn" data-dup="${row.id}" title="Duplicate row">⧉</button><button class="icon-btn" data-del="${row.id}" title="Delete row">×</button></td>`;
     tr.innerHTML = cells;
@@ -680,6 +807,20 @@ function renderTable(){
       const copy = Object.assign({}, state.rows[idx], { id: crypto.randomUUID() });
       state.rows.splice(idx+1, 0, copy);
       renderTable();
+    });
+  });
+  itemsBody.querySelectorAll("[data-teach]").forEach(link=>{
+    link.addEventListener("click", (e)=>{
+      e.preventDefault();
+      const row = state.rows.find(r=>r.id === e.target.dataset.teach);
+      if(!row) return;
+      $("#quickTranslateIn").value = row.origEnglish || (row.matched === false ? row.desc : "");
+      $("#quickTranslateOut").value = row.matched === false ? "" : row.desc;
+      // open the drawer if it's collapsed, then scroll the panel into view
+      const drawer = document.querySelector(".panel details");
+      if(drawer && !drawer.open) drawer.open = true;
+      $("#quickTranslateIn").scrollIntoView({behavior:"smooth", block:"center"});
+      $("#quickTranslateIn").focus();
     });
   });
   updateChecklist();
@@ -736,6 +877,8 @@ updateCourierLine();
 
 const ELEGANT_PHRASES = {
   gold14: "Biżuteria ze złota próby 585 (14K) wysadzana diamentami",
+  gold14lab: "Biżuteria ze złota próby 585 (14K) wysadzana diamentami laboratoryjnymi",
+  gold14natural: "Biżuteria ze złota próby 585 (14K) wysadzana diamentami naturalnymi",
   gold14mixed: "Biżuteria ze złota próby 585 (14K) wysadzana diamentami i kamieniami kolorowymi",
   basemetal: "Biżuteria ze stopu metali nieszlachetnych AY342 wysadzana cyrkoniami",
   platinum: "Biżuteria z platyny próby 950 wysadzana diamentami",
@@ -845,6 +988,7 @@ $("#translateDraftBtn").addEventListener("click", async ()=>{
     btn.innerText = `Translating ${i+1}/${targets.length}…`;
     const draft = await translateToPolishDraft(targets[i].desc);
     if(draft){
+      targets[i].origEnglish = targets[i].desc;
       targets[i].desc = draft;
       targets[i].matched = "draft";
     }
@@ -878,6 +1022,57 @@ $("#quickTranslateToRemarks").addEventListener("click", ()=>{
   const remarks = $("#remarksField");
   const draft = $("#quickTranslateOut").value;
   remarks.value = remarks.value.trim() ? remarks.value.trim() + "\n" + draft : draft;
+});
+
+function renderLearnedTermsList(){
+  const list = $("#learnedTermsList");
+  const count = $("#learnedCount");
+  const keys = Object.keys(LEARNED_TERMS).sort();
+  count.innerText = keys.length;
+
+  const statusLine = !FIRESTORE_URL
+    ? '<div class="hint" style="color:var(--gold);">⚠ Shared store not configured yet — terms are saved to this browser only, not shared across devices.</div>'
+    : learnedSyncStatus === "synced"
+    ? '<div class="hint" style="color:var(--verdigris);">✓ Synced — shared with every device using this app.</div>'
+    : '<div class="hint" style="color:var(--stamp);">⚠ Couldn\'t reach the shared store — saved to this browser only for now, will sync when back online.</div>';
+
+  if(!keys.length){
+    list.innerHTML = statusLine + '<div class="hint">Nothing saved yet — translate a phrase above, correct it if needed, then click Save.</div>';
+    return;
+  }
+  list.innerHTML = statusLine + keys.map(k => `
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:12px;">
+      <div><b>${k}</b><br><span style="color:var(--verdigris);">${LEARNED_TERMS[k].replace(/</g,"&lt;")}</span></div>
+      <button class="icon-btn" data-forget="${k.replace(/"/g,'&quot;')}" title="Remove">×</button>
+    </div>
+  `).join("");
+  list.querySelectorAll("[data-forget]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      forgetTerm(btn.dataset.forget);
+      renderLearnedTermsList();
+    });
+  });
+}
+renderLearnedTermsList();
+fetchSharedDictionary().then(renderLearnedTermsList);
+
+$("#quickTranslateSaveBtn").addEventListener("click", async ()=>{
+  const english = $("#quickTranslateIn").value;
+  const polish = $("#quickTranslateOut").value;
+  const btn = $("#quickTranslateSaveBtn");
+  if(!english.trim() || !polish.trim()){
+    btn.innerText = "Need both fields filled in";
+    setTimeout(()=>btn.innerText = "💾 Save to dictionary", 1800);
+    return;
+  }
+  if(learnTerm(english, polish)){
+    renderLearnedTermsList();
+    btn.innerText = "Saving…";
+    await pushSharedDictionary();
+    renderLearnedTermsList();
+    btn.innerText = learnedSyncStatus === "synced" ? "Saved & synced ✓" : "Saved locally (offline) ✓";
+    setTimeout(()=>btn.innerText = "💾 Save to dictionary", 2000);
+  }
 });
 
 /* ---------------------------------------------------------------
@@ -1484,28 +1679,27 @@ $("#generateBtn").addEventListener("click", ()=>{
   const bodyRows = state.rows.map((r,i) => [
     String(i+1),
     ...cols.map(c => {
-      // Stawka/rate is always left blank in the sent email across all
-      // three shipment types — it's stored on the row for reference but
-      // the real examples never show a value there.
-      if(state.type === "elegant" && c.key === "rate") return "";
       const v = r[c.key];
-      if(c.key==="qty"||c.key==="price"||c.key==="weight"||c.key==="rate") return v ? fmt(v) : "";
+      if(c.key==="qty"||c.key==="price"||c.key==="weight") return v ? fmt(v) : "";
       return v || "";
     })
   ]);
 
   const sumQty = state.rows.reduce((a,r)=>a+(parseFloat(r.qty)||0),0);
   const sumPrice = state.rows.reduce((a,r)=>a+(parseFloat(r.price)||0),0);
+  const sumWeight = state.rows.reduce((a,r)=>a+(parseFloat(r.weight)||0),0);
   const shipping = parseFloat($("#shippingCost").value)||0;
   const insurance = parseFloat($("#insuranceCost").value)||0;
 
   let totalsRow;
   if(state.type === "elegant"){
-    // matches the real sent example: no weight/material total shown, only qty and price
-    // RAZEM totals only the listed items — shipping/insurance are shown
-    // as separate lines below, since a customs agent reviewing the table
-    // will add those on top; folding them into RAZEM double-counts them.
-    totalsRow = ["", "RAZEM", fmt(sumQty), "", fmt(sumPrice), "", ""];
+    // RAZEM is the full grand total (items + shipping + insurance) —
+    // confirmed against real sent emails (e.g. 319.59+70.41+5.00=395.00,
+    // and 14745.27+200.73+5.00=14951.00). Koszt wysyłki/Ubezpieczenie
+    // are still shown as their own lines below for a transparent
+    // breakdown, but RAZEM itself is the number that matches the
+    // invoice's own CIF total.
+    totalsRow = ["", "RAZEM", fmt(sumQty), fmt(sumPrice + shipping + insurance), fmt(sumWeight), ""];
   } else {
     totalsRow = ["", "Razem", fmt(sumQty), "TOTAL", fmt(sumPrice)];
   }
