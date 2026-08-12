@@ -773,7 +773,7 @@ function renderTable(){
   if(state.type === "elegant"){
     const shipping = parseFloat($("#shippingCost")?.value)||0;
     const insurance = parseFloat($("#insuranceCost")?.value)||0;
-    itemsTotals.innerHTML = `<td></td><td>RAZEM</td><td>${fmt(sumQty)}</td><td>${fmt(sumPrice+shipping+insurance)}</td><td>${fmt(sumWeight)}</td><td></td><td></td>`;
+    itemsTotals.innerHTML = `<td></td><td>RAZEM</td><td>${fmt(sumQty)}</td><td>${fmt(sumPrice)}</td><td>${fmt(sumWeight)}</td><td></td><td></td>`;
     $("#elegantExtras").style.display = "grid";
   } else {
     itemsTotals.innerHTML = `<td></td><td>Razem</td><td>${fmt(sumQty)}</td><td>TOTAL</td><td>${fmt(sumPrice)}</td><td></td>`;
@@ -833,7 +833,7 @@ function updateTotalsOnly(){
   if(state.type === "elegant"){
     const shipping = parseFloat($("#shippingCost")?.value)||0;
     const insurance = parseFloat($("#insuranceCost")?.value)||0;
-    itemsTotals.innerHTML = `<td></td><td>RAZEM</td><td>${fmt(sumQty)}</td><td>${fmt(sumPrice+shipping+insurance)}</td><td>${fmt(sumWeight)}</td><td></td><td></td>`;
+    itemsTotals.innerHTML = `<td></td><td>RAZEM</td><td>${fmt(sumQty)}</td><td>${fmt(sumPrice)}</td><td>${fmt(sumWeight)}</td><td></td><td></td>`;
   } else {
     itemsTotals.innerHTML = `<td></td><td>Razem</td><td>${fmt(sumQty)}</td><td>TOTAL</td><td>${fmt(sumPrice)}</td><td></td>`;
   }
@@ -1389,10 +1389,18 @@ const COLOR_STONE_KEYS = ["sapphire","ruby","emerald","aquamarine","tanzanite","
 
 function classifyStone(remarks){
   if(!remarks) return {type:"natural"};
+  if(/\bLGD\b/i.test(remarks)) return {type:"labgrown"};
+  // "MINED" + a clarity grade (e.g. "MINED - G/SI2") means diamonds are
+  // present — that takes priority over an accent colored-stone mention
+  // in the same remarks (e.g. "MINED - G/SI2, RUBY" is a diamond piece
+  // with a ruby accent, not a pure colored-stone setting). Only treat a
+  // piece as "colored" when there's a color name and NO diamond grade —
+  // matching real packing lists where pure colored-stone pieces simply
+  // omit the MINED/clarity text entirely.
+  if(/\bMINED\b/i.test(remarks)) return {type:"natural"};
   for(const key of COLOR_STONE_KEYS){
     if(new RegExp("\\b"+key+"\\b","i").test(remarks)) return {type:"colored"};
   }
-  if(/\bLGD\b/i.test(remarks)) return {type:"labgrown"};
   return {type:"natural"};
 }
 
@@ -1693,13 +1701,12 @@ $("#generateBtn").addEventListener("click", ()=>{
 
   let totalsRow;
   if(state.type === "elegant"){
-    // RAZEM is the full grand total (items + shipping + insurance) —
-    // confirmed against real sent emails (e.g. 319.59+70.41+5.00=395.00,
-    // and 14745.27+200.73+5.00=14951.00). Koszt wysyłki/Ubezpieczenie
-    // are still shown as their own lines below for a transparent
-    // breakdown, but RAZEM itself is the number that matches the
-    // invoice's own CIF total.
-    totalsRow = ["", "RAZEM", fmt(sumQty), fmt(sumPrice + shipping + insurance), fmt(sumWeight), ""];
+    // RAZEM is items-only — the grand total (items + shipping +
+    // insurance) gets its own separate "Razem: X" line below Koszt
+    // wysyłki/Ubezpieczenie instead (per explicit annotated correction
+    // on a real generated email: RAZEM=14745.27, then a separate
+    // "Razem: 14951.00" line after the shipping/insurance lines).
+    totalsRow = ["", "RAZEM", fmt(sumQty), fmt(sumPrice), fmt(sumWeight), ""];
   } else {
     totalsRow = ["", "Razem", fmt(sumQty), "TOTAL", fmt(sumPrice)];
   }
@@ -1728,8 +1735,9 @@ $("#generateBtn").addEventListener("click", ()=>{
   tableHtml += `<tr>${totalsRow.map((c,i)=>td(c, "font-weight:bold;background:#f3e7cd;" + (i>=2?"text-align:right;":""))).join("")}</tr>`;
   tableHtml += `</table>`;
 
-  const extraLinesText = state.type === "elegant" ? `\nKoszt wysyłki: ${fmt(shipping)}\nUbezpieczenie: ${fmt(insurance)}\n` : "";
-  const extraLinesHtml = state.type === "elegant" ? `<p>Koszt wysyłki: ${fmt(shipping)}<br>Ubezpieczenie: ${fmt(insurance)}</p>` : "";
+  const grandTotal = fmt(sumPrice + shipping + insurance);
+  const extraLinesText = state.type === "elegant" ? `\nKoszt wysyłki: ${fmt(shipping)}\nUbezpieczenie: ${fmt(insurance)}\nRazem: ${grandTotal}\n` : "";
+  const extraLinesHtml = state.type === "elegant" ? `<p>Koszt wysyłki: ${fmt(shipping)}<br>Ubezpieczenie: ${fmt(insurance)}<br><b>Razem: ${grandTotal}</b></p>` : "";
 
   const remarks = $("#remarksField").value.trim();
   const showMissing = state.type === "india" && $("#cannedMissing").checked;
