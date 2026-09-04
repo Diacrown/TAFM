@@ -1386,6 +1386,7 @@ function parseElegantList(text){
    description always says the generic "kamieniami kolorowymi", never
    the specific gem, matching real sent examples. */
 const COLOR_STONE_KEYS = ["sapphire","ruby","emerald","aquamarine","tanzanite","tourmaline","morganite","spinel","garnet","topaz","amethyst","citrine","peridot","zircon","iolite","kunzite"];
+let lastElegantContentLines = null;
 
 function classifyStone(remarks){
   if(!remarks) return {type:"natural"};
@@ -1405,12 +1406,12 @@ function classifyStone(remarks){
 }
 
 function buildElegantGroupDesc(materialKey, stoneType, isSemiMount){
-  if(isSemiMount){
-    return 'Biżuteria typu "semi-mount" (półfabrykaty) z ' + METAL_CONTENT_PHRASE.platinum + ' częściowo wysadzana diamentami';
-  }
   const isGold = /k$/i.test(materialKey) && materialKey.toLowerCase() !== "pt950";
   const metalPhrase = METAL_CONTENT_PHRASE[materialKey.toLowerCase()] || METAL_CONTENT_PHRASE.platinum;
   const prep = isGold ? "ze" : "z";
+  if(isSemiMount){
+    return `Biżuteria typu "semi-mount" (półfabrykaty) ${prep} ${metalPhrase} częściowo wysadzana diamentami`;
+  }
   let stonePhrase;
   if(stoneType === "colored") stonePhrase = "kamieniami kolorowymi" + (isGold ? " naturalnymi" : "");
   else if(stoneType === "labgrown") stonePhrase = "diamentami" + (isGold ? " laboratoryjnymi" : "");
@@ -1465,13 +1466,24 @@ function parseElegantListWithPackingList(text){
 
   const groupList = Object.values(groups);
   const multi = groupList.length > 1;
+
+  // The content-line summary groups by material+stone-type+semimount
+  // ONLY (no jewelry type) — matches how real invoice headers describe
+  // the shipment ("14KT GOLD... DIAMONDS. 18KT GOLD... DIAMONDS.") one
+  // sentence per material/stone combo, regardless of how many jewelry
+  // types share it. Computed here (before the jewelry-type suffix is
+  // appended below) and stashed for the caller to auto-fill the
+  // content-line field with, since it's the same underlying grouping.
+  const contentLineSet = new Set(groupList.map(g => buildElegantGroupDesc(g.material, g.stoneType, g.isSemiMount)));
+  lastElegantContentLines = Array.from(contentLineSet);
+
   return groupList.map(g => {
     let desc = buildElegantGroupDesc(g.material, g.stoneType, g.isSemiMount);
     const jType = JEWELRY_TYPE_PL[g.itemType.toLowerCase()] || g.itemType.toLowerCase();
     if(multi) desc += ` (${jType})`;
     return newRow({
       desc, qty: g.qty.toFixed(2), price: g.price.toFixed(2), weight: g.weight.toFixed(3),
-      material: g.isSemiMount ? METAL_MAP.platinum : (METAL_MAP[g.material.toLowerCase()] || g.material),
+      material: METAL_MAP[g.material.toLowerCase()] || g.material,
       matched: true
     });
   });
@@ -1580,6 +1592,7 @@ function parseGeneric(text){
    reconciliation fields when present in the text. */
 parseRowsBtn.addEventListener("click", ()=>{
   const text = rawText.value;
+  lastElegantContentLines = null;
   const byType = {
     bangkok: parseBangkokCI,
     india: parseIndiaTaxInvoice,
@@ -1616,6 +1629,13 @@ parseRowsBtn.addEventListener("click", ()=>{
     const insMatch = text.match(/\bINS\s*US\$?\.?\s*([\d,]+\.\d+)/i) || text.match(/Insurance\s*US\$?\.?\s*([\d,]+\.\d+)/i);
     if(freightMatch) $("#shippingCost").value = freightMatch[1].replace(/,/g,"");
     if(insMatch) $("#insuranceCost").value = insMatch[1].replace(/,/g,"");
+    // Auto-fill the content-line summary from the same grouping the
+    // cross-referenced parser derived — only when the field is still
+    // empty, so it never overwrites something already typed/edited.
+    if(lastElegantContentLines && lastElegantContentLines.length && !$("#elegantContentLines").value.trim()){
+      $("#elegantContentLines").value = lastElegantContentLines.join("\n");
+      $("#elegantContentLines").style.borderColor = "";
+    }
     updateChecklist();
   }
   if(awbMatch || cifMatch) checkIndiaRecon();
