@@ -565,15 +565,32 @@ const METAL_MAP = {
   "18k":"Złoto próby 18K","18kt":"Złoto próby 18K",
   "9k":"Złoto próby 9K","10k":"Złoto próby 10K",
   "platinum":"Platyna PT950","pt950":"Platyna PT950","950":"Platyna PT950",
-  "silver":"Srebro próby 925","925":"Srebro próby 925"
+  "silver":"Srebro próby 925","925":"Srebro próby 925",
+  "ay342":"Stop AY342"
 };
 const METAL_CONTENT_PHRASE = {
   "14k":"złota próby 585 (14K)","14kt":"złota próby 585 (14K)",
   "18k":"złota próby 750 (18K)","18kt":"złota próby 750 (18K)",
   "9k":"złota próby 375 (9K)","10k":"złota próby 417 (10K)",
   "platinum":"platyny próby 950","pt950":"platyny próby 950","950":"platyny próby 950",
-  "silver":"srebra próby 925","925":"srebra próby 925"
+  "silver":"srebra próby 925","925":"srebra próby 925",
+  "ay342":"stopu metali nieszlachetnych AY342"
 };
+/* Generic fallback for any base-metal alloy code the fixed maps above
+   don't already know (e.g. a different alloy than AY342 shows up on a
+   future invoice) — rather than failing to label it at all, produce a
+   sensible generic Polish phrase using the code itself, so a new alloy
+   code degrades gracefully instead of breaking. */
+function getMaterialLabel(key){
+  const k = key.toLowerCase();
+  if(METAL_MAP[k]) return METAL_MAP[k];
+  return "Stop " + key.toUpperCase();
+}
+function getMaterialPhrase(key){
+  const k = key.toLowerCase();
+  if(METAL_CONTENT_PHRASE[k]) return METAL_CONTENT_PHRASE[k];
+  return "stopu metali nieszlachetnych " + key.toUpperCase();
+}
 const JEWELRY_TYPE_PL = {
   ring:"pierścionek", earring:"kolczyki", earrings:"kolczyki",
   necklace:"naszyjnik", bracelet:"bransoletka", pendant:"zawieszka",
@@ -1390,6 +1407,9 @@ let lastElegantContentLines = null;
 
 function classifyStone(remarks){
   if(!remarks) return {type:"natural"};
+  // cubic zirconia is its own category — synthetic by definition, so it
+  // doesn't get a natural/lab-grown qualifier the way diamonds do
+  if(/\bCZ\b/i.test(remarks) || /cubic\s*zirconia/i.test(remarks)) return {type:"zirconia"};
   if(/\bLGD\b/i.test(remarks)) return {type:"labgrown"};
   // "MINED" + a clarity grade (e.g. "MINED - G/SI2") means diamonds are
   // present — that takes priority over an accent colored-stone mention
@@ -1407,13 +1427,14 @@ function classifyStone(remarks){
 
 function buildElegantGroupDesc(materialKey, stoneType, isSemiMount){
   const isGold = /k$/i.test(materialKey) && materialKey.toLowerCase() !== "pt950";
-  const metalPhrase = METAL_CONTENT_PHRASE[materialKey.toLowerCase()] || METAL_CONTENT_PHRASE.platinum;
+  const metalPhrase = getMaterialPhrase(materialKey);
   const prep = isGold ? "ze" : "z";
   if(isSemiMount){
     return `Biżuteria typu "semi-mount" (półfabrykaty) ${prep} ${metalPhrase} częściowo wysadzana diamentami`;
   }
   let stonePhrase;
-  if(stoneType === "colored") stonePhrase = "kamieniami kolorowymi" + (isGold ? " naturalnymi" : "");
+  if(stoneType === "zirconia") stonePhrase = "cyrkoniami";
+  else if(stoneType === "colored") stonePhrase = "kamieniami kolorowymi" + (isGold ? " naturalnymi" : "");
   else if(stoneType === "labgrown") stonePhrase = "diamentami" + (isGold ? " laboratoryjnymi" : "");
   else stonePhrase = "diamentami" + (isGold ? " naturalnymi" : "");
   return `Biżuteria ${prep} ${metalPhrase} wysadzana ${stonePhrase}`;
@@ -1432,7 +1453,7 @@ function buildElegantGroupDesc(materialKey, stoneType, isSemiMount){
    pages are present; validated exactly against two real documents. */
 function parseElegantListWithPackingList(text){
   const styleRemarks = {};
-  const packRe = /^\s*(\S+)\s+.+?\s+(\S+\*)\s+\d+\s*[Xx]\s*\d+\s+\d+\s+([\s\S]*?)\n\s*Sub Total/gm;
+  const packRe = /^\s*(\S+)\s+.+?\s+(\S+\*[A-Z]*(?:\s[A-Z]{2,})*)\s+\d+\s*[Xx]\s*\d+\s+\d+\s+([\s\S]*?)\n\s*Sub Total/gm;
   let pm;
   while((pm = packRe.exec(text)) !== null){
     const remarks = pm[3].replace(/\s+/g," ").trim();
@@ -1440,7 +1461,7 @@ function parseElegantListWithPackingList(text){
   }
   if(Object.keys(styleRemarks).length === 0) return null; // no packing list present
 
-  const itemRe = /^\s*\d+\s+(\S+)\s+(Ring|Earrings?|Necklace|Bracelet|Pendant|Chain|Bangle|Studs?)\s+(\S+\*)\s+(\d+)\s+([\d.]+)\s+(14K|18K|9K|10K|Platinum|PT950|Silver)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s*$/gim;
+  const itemRe = /^\s*\d+\s+(\S+)\s+(Ring|Earrings?|Necklace|Bracelet|Pendant|Chain|Bangle|Studs?)\s+(\S+\*[A-Z]*(?:\s[A-Z]{2,})*)\s+(\d+)\s+([\d.]+)\s+(14K|18K|9K|10K|Platinum|PT950|Silver|925|[A-Z]{1,4}\d{2,4})\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s*$/gim;
   const items = [];
   let im;
   while((im = itemRe.exec(text)) !== null){
@@ -1483,7 +1504,7 @@ function parseElegantListWithPackingList(text){
     if(multi) desc += ` (${jType})`;
     return newRow({
       desc, qty: g.qty.toFixed(2), price: g.price.toFixed(2), weight: g.weight.toFixed(3),
-      material: METAL_MAP[g.material.toLowerCase()] || g.material,
+      material: getMaterialLabel(g.material),
       matched: true
     });
   });
