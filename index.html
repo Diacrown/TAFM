@@ -1059,7 +1059,7 @@ function renderLearnedTermsList(){
   }
   list.innerHTML = statusLine + keys.map(k => `
     <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:12px;">
-      <div><b>${k}</b><br><span style="color:var(--verdigris);">${LEARNED_TERMS[k].replace(/</g,"&lt;")}</span></div>
+      <div><b>${esc(k)}</b><br><span style="color:var(--verdigris);">${LEARNED_TERMS[k].replace(/</g,"&lt;")}</span></div>
       <button class="icon-btn" data-forget="${k.replace(/"/g,'&quot;')}" title="Remove">×</button>
     </div>
   `).join("");
