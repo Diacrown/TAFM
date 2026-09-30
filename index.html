@@ -1128,7 +1128,7 @@ async function handleFile(file){
     if(isPdf){
       setStatus("Reading PDF…", "busy");
       const buf = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+      const pdf = await pdfjsLib.getDocument({data:buf, isEvalSupported:false}).promise;
       const pageTexts = [];
       let ocrPageCount = 0;
       /* Check and OCR EVERY page independently, not just the first one.
