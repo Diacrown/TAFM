@@ -202,6 +202,40 @@
   .panel-toggle::before{content:"▸";transition:transform .15s;}
   details[open] > .panel-toggle::before{transform:rotate(90deg);}
   .panel-toggle::after{content:"";flex:1;height:1px;background:var(--line);}
+
+  /* ===== Mobile / touch ===== */
+  .wrap{padding-left:max(24px,env(safe-area-inset-left));padding-right:max(24px,env(safe-area-inset-right));}
+  .output-box{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  @media (max-width:700px){
+    .wrap{padding:14px 12px 60px;}
+    .panel{padding:14px 12px;}
+    select, input[type=text], input[type=number], textarea{font-size:16px !important;min-height:42px;}
+    button.btn{min-height:44px;padding:10px 14px;font-size:14px;}
+    button.btn.small{min-height:40px;padding:8px 12px;font-size:13px;}
+    .tab{padding:10px 14px;font-size:14px;flex:1 1 auto;text-align:center;}
+    .toolbar{flex-direction:column;align-items:stretch;}
+    .toolbar > *{width:100%;}
+    .toolbar .btn{width:100%;}
+    .copy-row{flex-direction:column;justify-content:stretch;}
+    .copy-row .btn{width:100%;}
+    .extra-fields{grid-template-columns:1fr;}
+    .dropzone{padding:22px 12px;}
+    /* line items -> cards */
+    table.items, table.items tbody, table.items tfoot, table.items tr, table.items td{display:block;width:100%;}
+    table.items thead{display:none;}
+    table.items tr{border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin-bottom:10px;background:var(--paper-raised,#fff);position:relative;}
+    table.items td{border:none;padding:4px 0;}
+    table.items td[data-label]::before{content:attr(data-label);display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);margin-bottom:2px;}
+    table.items td.num-cell{font-weight:600;}
+    table.items td.num-cell::before{display:inline;margin-right:6px;}
+    table.items input{font-size:16px;min-height:42px;border:1px solid var(--line);background:#fff;padding:8px;}
+    table.items td.row-actions{display:flex;gap:10px;justify-content:flex-end;padding-top:8px;}
+    .icon-btn{min-width:44px;min-height:44px;font-size:18px;}
+    table.items tfoot tr.totals-row{display:flex;flex-wrap:wrap;gap:6px 14px;font-weight:600;background:var(--paper,#faf7f0);}
+    table.items tfoot td{display:inline-block;width:auto;padding:0;}
+    table.items tfoot td:empty{display:none;}
+    .output-box{font-size:13px;}
+  }
 </style>
 </head>
 <body>
@@ -593,7 +627,7 @@ function getMaterialPhrase(key){
 }
 const JEWELRY_TYPE_PL = {
   ring:"pierścionek", earring:"kolczyki", earrings:"kolczyki",
-  necklace:"naszyjnik", bracelet:"bransoletka", pendant:"zawieszka",
+  necklace:"naszyjnik", neckpiece:"naszyjnik", bracelet:"bransoletka", pendant:"zawieszka",
   chain:"łańcuszek", bangle:"bransoleta sztywna", stud:"wkrętki", studs:"wkrętki"
 };
 
@@ -771,11 +805,11 @@ function renderTable(){
   state.rows.forEach((row, idx) => {
     const tr = document.createElement("tr");
     if(row.matched === false) tr.classList.add("unmatched");
-    let cells = `<td style="color:var(--ink-soft);">${idx+1}</td>`;
+    let cells = `<td class="num-cell" data-label="Pozycja" style="color:var(--ink-soft);">${idx+1}</td>`;
     cols.forEach(c=>{
       const val = row[c.key] ?? "";
       const cls = c.key === "desc" ? "desc-cell" : "";
-      cells += `<td class="${cls}"><input data-row="${row.id}" data-key="${c.key}" type="${c.type==='num'?'text':'text'}" value="${val.toString().replace(/"/g,'&quot;')}">${(c.key==='desc' && row.matched===false)?`<span class="badge-nomatch">no dictionary match — check translation <a href="#" data-teach="${row.id}" style="color:inherit;">(teach it →)</a></span>`:''}${(c.key==='desc' && row.matched==='grading')?'<span class="badge-grading">grading code — left as international shorthand</span>':''}${(c.key==='desc' && row.matched==='draft')?`<span class="badge-draft">machine-translated draft — verify wording <a href="#" data-teach="${row.id}" style="color:inherit;">(save →)</a></span>`:''}${(c.key==='desc' && row.matched==='learned')?'<span class="badge-learned">from your saved dictionary</span>':''}</td>`;
+      cells += `<td class="${cls}" data-label="${c.label}"><input data-row="${row.id}" data-key="${c.key}" type="${c.type==='num'?'text':'text'}" value="${val.toString().replace(/"/g,'&quot;')}">${(c.key==='desc' && row.matched===false)?`<span class="badge-nomatch">no dictionary match — check translation <a href="#" data-teach="${row.id}" style="color:inherit;">(teach it →)</a></span>`:''}${(c.key==='desc' && row.matched==='grading')?'<span class="badge-grading">grading code — left as international shorthand</span>':''}${(c.key==='desc' && row.matched==='draft')?`<span class="badge-draft">machine-translated draft — verify wording <a href="#" data-teach="${row.id}" style="color:inherit;">(save →)</a></span>`:''}${(c.key==='desc' && row.matched==='learned')?'<span class="badge-learned">from your saved dictionary</span>':''}</td>`;
     });
     cells += `<td class="row-actions"><button class="icon-btn" data-dup="${row.id}" title="Duplicate row">⧉</button><button class="icon-btn" data-del="${row.id}" title="Delete row">×</button></td>`;
     tr.innerHTML = cells;
@@ -1290,6 +1324,46 @@ function translateIndiaDescription(rawDesc, labGrownHint){
   return { out: `Kamienie szlachetne, cięte i polerowane (${label})`, matched: true };
 }
 
+/* India-office jewellery invoices (e.g. "18 KT YELLOW GOLD SEMI-MOUNTING
+   JEWELLERY STUDDED WITH NATURAL DIAMONDS") use a completely different
+   layout than the simple S.No/Description/Carats/Rate/Amount table the
+   rest of India's invoices use — a GOLD table (Item/KT/Qty/Weight/Rate)
+   plus a separate STUDDING table (stone type/pcs/carats/value). Trying
+   to run the standard India parser against this produces nonsense (it
+   picks up individual studding-table numbers as if they were carat/
+   price pairs), so this is tried first and, when it matches, takes
+   priority — it's a much stronger, more specific signal than the loose
+   numeric-token fallback. */
+function parseIndiaJewelleryInvoice(text){
+  const headerM = text.match(/(\d+)\s*KT\s+(?:YELLOW\s+|WHITE\s+)?GOLD\s+(SEMI[\s-]?MOUNT(?:ING)?\s+)?JEWELLERY\s+STUDDED\s+WITH\s+(NATURAL\s+|LAB\s*GROWN\s+)?DIAMONDS/i);
+  if(!headerM) return null;
+
+  const materialKey = headerM[1] + "k";
+  const isSemiMount = !!headerM[2];
+  const originText = (headerM[3] || "").trim().toUpperCase();
+  const stoneType = /LAB/.test(originText) ? "labgrown" : "natural";
+
+  const itemM = text.match(/^\s*(RING|PENDANT|EARRING|BRACELET|NECKLACE|CHAIN|BANGLE|STUD)\s+\d+\s+(\d+)\s+PCS/im);
+  const qty = itemM ? itemM[2] : "1";
+  const jewelryType = itemM ? (JEWELRY_TYPE_PL[itemM[1].toLowerCase()] || itemM[1].toLowerCase()) : "";
+
+  const weightM = text.match(/GROSS\s*WT\.?\s*GMS\.?[\s\S]{0,400}?(\d+\.\d{3})/i);
+  const weight = weightM ? weightM[1] : "";
+
+  const totalM = text.match(/TOTAL\s*COST\s+([\d,]+\.\d+)/i) || text.match(/\bCIF\s+([\d,]+\.\d+)/i);
+  if(!totalM) return null;
+  const price = totalM[1].replace(/,/g,"");
+
+  let desc = buildElegantGroupDesc(materialKey, stoneType, isSemiMount);
+  if(jewelryType) desc += ` (${jewelryType})`;
+
+  return [newRow({
+    desc, qty, price, weight,
+    material: getMaterialLabel(materialKey),
+    matched: true
+  })];
+}
+
 function parseIndiaTaxInvoice(text){
   /* Numeric-token counting instead of matching the literal "Pc(s)" text.
      OCR renders that label inconsistently on every scan (Pc{s), Pe(s),
@@ -1299,7 +1373,7 @@ function parseIndiaTaxInvoice(text){
      — with an optional pieces-count further back that we ignore) works
      regardless of how that label gets mangled, and scales to any number
      of rows since it's applied per line in a loop, not a fixed count. */
-  const labGrownInvoice = /LAB\s*GROWN/i.test(text);
+  const labGrownInvoice = /LAB\s*GROWN\s+(CUT|DIAMONDS)/i.test(text);
   // strip common OCR noise characters that show up mid-line, not just at
   // the end (stray pipes, curly braces from misread parentheses)
   const lines = text.split("\n").map(l => l.replace(/[|`{}]+/g, " ").replace(/\s{2,}/g," ").trim());
@@ -1407,6 +1481,11 @@ let lastElegantContentLines = null;
 
 function classifyStone(remarks){
   if(!remarks) return {type:"natural"};
+  // Plain mounting / unstudded piece: remarks carry no stone information at all
+  // (no MINED/LGD/CZ, no colour-stone word, no clarity grade like FG/VS, H/SI1),
+  // e.g. "MTG", "MTG ONLY", "MOUNT", "MOUTING", or just the metal.
+  if(!/\bMINED\b|\bLGD\b|\bCZ\b|cubic\s*zirconia|\bDia\b|[A-Z]{1,2}\s*\/\s*(?:VS|SI|I)\d?/i.test(remarks) &&
+     !COLOR_STONE_KEYS.some(k => new RegExp("\\b"+k+"\\b","i").test(remarks))) return {type:"unstudded"};
   // cubic zirconia is its own category — synthetic by definition, so it
   // doesn't get a natural/lab-grown qualifier the way diamonds do
   if(/\bCZ\b/i.test(remarks) || /cubic\s*zirconia/i.test(remarks)) return {type:"zirconia"};
@@ -1432,6 +1511,7 @@ function buildElegantGroupDesc(materialKey, stoneType, isSemiMount){
   if(isSemiMount){
     return `Biżuteria typu "semi-mount" (półfabrykaty) ${prep} ${metalPhrase} częściowo wysadzana diamentami`;
   }
+  if(stoneType === "unstudded") return `Biżuteria ${prep} ${metalPhrase} niewysadzana kamieniami`;
   let stonePhrase;
   if(stoneType === "zirconia") stonePhrase = "cyrkoniami";
   else if(stoneType === "colored") stonePhrase = "kamieniami kolorowymi" + (isGold ? " naturalnymi" : "");
@@ -1461,12 +1541,12 @@ function parseElegantListWithPackingList(text){
   }
   if(Object.keys(styleRemarks).length === 0) return null; // no packing list present
 
-  const itemRe = /^\s*\d+\s+(\S+)\s+(Ring|Earrings?|Necklace|Bracelet|Pendant|Chain|Bangle|Studs?)\s+(\S+\*[A-Z]*(?:\s[A-Z]{2,})*)\s+(\d+)\s+([\d.]+)\s+(14K|18K|9K|10K|Platinum|PT950|Silver|925|[A-Z]{1,4}\d{2,4})\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s*$/gim;
+  const itemRe = /^\s*\d+\s+(\S+)\s+(Ring|Earrings?|Necklace|Neck\s*Piece|Bracelet|Pendant|Chain|Bangle|Studs?)\s+(\S+\*[A-Z]*(?:\s[A-Z]{2,})*)\s+(\d+)\s+([\d.]+)\s+(14K|18K|9K|10K|Platinum|PT950|Silver|925|[A-Z]{1,4}\d{2,4})\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s*$/gim;
   const items = [];
   let im;
   while((im = itemRe.exec(text)) !== null){
     items.push({
-      styleNo: im[1], itemType: im[2], qty: parseFloat(im[4]),
+      styleNo: im[1], itemType: im[2].replace(/\s+/g,""), qty: parseFloat(im[4]),
       weight: parseFloat(im[5]), material: im[6],
       price: parseFloat(im[8].replace(/,/g,""))
     });
@@ -1516,7 +1596,7 @@ function parseElegantSummaryList(text){
   const stoneRe = /\b(LGD|Diamonds?|Dia|Colou?r(?:ed)?\s*Stones?)\b/i;
   const semiMountRe = /Semi\s*Mount/i;
   // invoice-level fallback signal when no per-row LGD marker is present
-  const labGrownInvoice = /LAB\s*GROWN/i.test(text);
+  const labGrownInvoice = /LAB\s*GROWN\s+(CUT|DIAMONDS)/i.test(text);
 
   const lines = text.split("\n").map(l => l.replace(/[|{}\[\]]+/g, " ").replace(/\s{2,}/g," ").trim());
   const rows = [];
@@ -1616,7 +1696,7 @@ parseRowsBtn.addEventListener("click", ()=>{
   lastElegantContentLines = null;
   const byType = {
     bangkok: parseBangkokCI,
-    india: parseIndiaTaxInvoice,
+    india: (t) => parseIndiaJewelleryInvoice(t) || parseIndiaTaxInvoice(t),
     elegant: (t) => parseElegantListWithPackingList(t) || parseElegantSummaryList(t) || parseElegantList(t)
   };
   let rows = byType[state.type] ? byType[state.type](text) : null;
@@ -1872,7 +1952,7 @@ $("#resetBtn").addEventListener("click", ()=>{
   if(!confirm("Clear all fields and start a fresh form? This can't be undone.")) return;
   state.rows = [newRow()];
   $("#remarksField").value = "";
-  $("#signerName").value = "Weronika Byczenko";
+  $("#signerName").value = "Darshil Shah";
   $("#elegantContentLines").value = "";
   $("#indiaInvoiceSum").value = "";
   $("#indiaAwbValue").value = "";
