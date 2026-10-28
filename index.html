@@ -1478,6 +1478,7 @@ function parseElegantList(text){
    the specific gem, matching real sent examples. */
 const COLOR_STONE_KEYS = ["sapphire","ruby","emerald","aquamarine","tanzanite","tourmaline","morganite","spinel","garnet","topaz","amethyst","citrine","peridot","zircon","iolite","kunzite"];
 let lastElegantContentLines = null;
+let lastElegantItems = null;
 
 function classifyStone(remarks){
   if(!remarks) return {type:"natural"};
@@ -1554,10 +1555,14 @@ function parseElegantListWithPackingList(text){
   if(!items.length) return null;
 
   const groups = {};
+  lastElegantItems = [];
   for(const item of items){
     const remarks = styleRemarks[item.styleNo] || "";
     const isSemiMount = /SEMI\s*MTG|SEMI\s*MOUNT/i.test(remarks);
     const {type} = classifyStone(remarks);
+    lastElegantItems.push(Object.assign({}, item, {
+      stoneType: type, status: isSemiMount ? "semi" : (type === "unstudded" ? "unstudded" : "studded")
+    }));
     const key = [item.material.toLowerCase(), isSemiMount ? "semimount" : type, item.itemType.toLowerCase()].join("|");
     if(!groups[key]) groups[key] = { material:item.material, stoneType:type, isSemiMount, itemType:item.itemType, qty:0, weight:0, price:0 };
     groups[key].qty += item.qty;
@@ -1588,6 +1593,144 @@ function parseElegantListWithPackingList(text){
       matched: true
     });
   });
+}
+
+/* Invoice-faithful rows. Every Elegant Collection invoice carries its own
+   summary page ("As per Attached List") with lines such as
+   "Ring Studded 22 PCS 18,503.30" / "Ring Semi Mount 4 PCS 2,416.13".
+   The Polish customs partner matches our table against THOSE lines, so the
+   rows must mirror them one-to-one (same type, studding status, quantity,
+   amount). Each piece from the itemised list is assigned to a summary line
+   by exact cent totals (starting from the remarks-based guess, then repairing
+   small mismatches), which gives the weight and material of each line.
+   Returns null whenever it cannot reconcile exactly, so the older
+   grouping parsers still run as the fallback. */
+function parseElegantSummaryLines(text){
+  const lineRe = /^\s*(Bracelet|Earrings?|Neck\s*Piece|Neckpiece(?:\s+with\s+Chain)?|Necklace|Pendant(?:\s+With\s+Chain)?|Ring)\s+(Studded|Unstudded|Semi\s*Mount)\s+(\d+)\s+(?:PCS|PRS)\s+([\d,]+\.\d{2})\s*$/gim;
+  const lines = [];
+  let m;
+  while((m = lineRe.exec(text)) !== null){
+    const label = m[1].replace(/\s+/g," ").trim();
+    const low = label.toLowerCase().replace(/\s+/g,"");
+    const family = low.startsWith("neckpiece") ? "neckpiece" : low.replace(/s$/,"").replace(/with.*$/,"");
+    lines.push({
+      label, family, withChain: /chain/i.test(label),
+      status: /^semi/i.test(m[2]) ? "semi" : m[2].toLowerCase() === "unstudded" ? "unstudded" : "studded",
+      count: parseInt(m[3],10), cents: Math.round(parseFloat(m[4].replace(/,/g,""))*100), items: []
+    });
+  }
+  if(!lines.length) return null;
+  if(!parseElegantListWithPackingList(text) || !lastElegantItems || !lastElegantItems.length) return null;
+  const all = lastElegantItems.map(it => Object.assign({}, it, {
+    cents: Math.round(it.price*100),
+    family: (it.itemType||"").toLowerCase().replace(/s$/,"")
+  }));
+  const totalLines = lines.reduce((a,l)=>a+l.cents,0), totalItems = all.reduce((a,i)=>a+i.cents,0);
+  if(totalLines !== totalItems || lines.reduce((a,l)=>a+l.count,0) !== all.length) return null;
+
+  // find `k` items (from pool) whose cents add up to `target`; null if none
+  function findCombo(pool, k, target){
+    let steps = 0; const pick = [];
+    function rec(start, left, sum){
+      if(left === 0) return sum === target;
+      for(let i=start; i<=pool.length-left; i++){
+        if(++steps > 4000000) return false;
+        if(sum + pool[i].cents > target) continue;
+        pick.push(pool[i]);
+        if(rec(i+1, left-1, sum+pool[i].cents)) return true;
+        pick.pop();
+      }
+      return false;
+    }
+    return rec(0,k,0) ? pick.slice() : null;
+  }
+
+  const families = [...new Set(lines.map(l=>l.family))];
+  for(const fam of families){
+    const famLines = lines.filter(l=>l.family===fam);
+    let pool = all.filter(i=>i.family===fam);
+    if(famLines.reduce((a,l)=>a+l.count,0) !== pool.length) return null;
+    // A) status-level totals: repair the remarks-based guess where the invoice disagrees
+    const target = {};
+    for(const l of famLines){ target[l.status] = target[l.status] || {n:0,c:0}; target[l.status].n += l.count; target[l.status].c += l.cents; }
+    for(const st of ["studded","unstudded","semi"]) target[st] = target[st] || {n:0,c:0};
+    const cur = st => { const a = pool.filter(i=>i.status===st); return {n:a.length, c:a.reduce((x,i)=>x+i.cents,0), a}; };
+    for(let guard=0; guard<6; guard++){
+      const need = ["studded","unstudded","semi"].filter(st => cur(st).n < target[st].n || cur(st).c !== target[st].c);
+      if(!need.length) break;
+      let moved = false;
+      for(const B of need){
+        const cb = cur(B);
+        const k = target[B].n - cb.n, amt = target[B].c - cb.c;
+        if(k <= 0 || k > 4) continue;
+        for(const A of ["studded","unstudded","semi"]){
+          if(A === B) continue;
+          const ca = cur(A);
+          if(ca.n - k < target[A].n) continue;
+          const combo = findCombo(ca.a, k, amt);
+          if(combo){ combo.forEach(i => i.status = B); moved = true; break; }
+        }
+        if(moved) break;
+      }
+      if(!moved) return null;
+    }
+    for(const st of ["studded","unstudded","semi"]) if(cur(st).n !== target[st].n || cur(st).c !== target[st].c) return null;
+    // B) several invoice lines with the same status (e.g. gold vs platinum): split by exact totals
+    for(const st of ["studded","unstudded","semi"]){
+      const stLines = famLines.filter(l=>l.status===st).sort((a,b)=>a.count-b.count);
+      let rest = pool.filter(i=>i.status===st);
+      for(let li=0; li<stLines.length; li++){
+        const l = stLines[li];
+        if(li === stLines.length-1){ l.items = rest; break; }
+        const combo = findCombo(rest, l.count, l.cents);
+        if(!combo) return null;
+        l.items = combo; rest = rest.filter(i => !combo.includes(i));
+      }
+    }
+  }
+
+  const JT = {ring:"pierścionek", earring:"kolczyki", necklace:"naszyjnik", neckpiece:"naszyjnik", bracelet:"bransoletka", pendant:"zawieszka"};
+  const isGoldKey = k => /k$/i.test(k) && k.toLowerCase() !== "pt950";
+  const rows = [];
+  const contentSet = new Set();
+  for(const l of lines){
+    if(!l.items.length) return null;
+    const mats = [...new Set(l.items.map(i=>i.material.toLowerCase()))].sort();
+    const stones = [...new Set(l.items.map(i=>i.stoneType))];
+    const combos = new Set(l.items.map(i => i.material.toLowerCase()+"|"+i.stoneType));
+    let desc;
+    if(combos.size === 1){
+      desc = buildElegantGroupDesc(l.items[0].material, l.items[0].stoneType, l.status === "semi");
+      if(l.status === "unstudded") desc = buildElegantGroupDesc(l.items[0].material, "unstudded", false);
+    } else {
+      const anyGold = mats.some(isGoldKey);
+      const metalPhrase = mats.map(getMaterialPhrase).join(" oraz ");
+      const prep = isGoldKey(mats[0]) ? "ze" : "z";
+      if(l.status === "semi") desc = `Biżuteria typu "semi-mount" (półfabrykaty) ${prep} ${metalPhrase} częściowo wysadzana diamentami`;
+      else if(l.status === "unstudded") desc = `Biżuteria ${prep} ${metalPhrase} niewysadzana kamieniami`;
+      else {
+        const parts = [];
+        if(stones.includes("natural")) parts.push("diamentami");
+        if(stones.includes("labgrown")) parts.push("diamentami laboratoryjnymi");
+        if(stones.includes("colored")) parts.push("kamieniami kolorowymi");
+        if(stones.includes("zirconia")) parts.push("cyrkoniami");
+        let sp = parts.join(" i ");
+        if(anyGold && !stones.includes("labgrown") && !stones.includes("zirconia")) sp += " naturalnymi";
+        desc = `Biżuteria ${prep} ${metalPhrase} wysadzana ${sp}`;
+      }
+    }
+    for(const i of l.items) contentSet.add(buildElegantGroupDesc(i.material, i.stoneType, i.status === "semi"));
+    let jt = JT[l.family] || l.family;
+    if(l.withChain) jt += " z łańcuszkiem";
+    desc += ` (${jt})`;
+    rows.push(newRow({
+      desc, qty: l.count.toFixed(2), price: (l.cents/100).toFixed(2),
+      weight: l.items.reduce((a,i)=>a+i.weight,0).toFixed(3),
+      material: mats.map(getMaterialLabel).join(", "), matched: true
+    }));
+  }
+  lastElegantContentLines = Array.from(contentSet);
+  return rows;
 }
 
 function parseElegantSummaryList(text){
@@ -1697,7 +1840,7 @@ parseRowsBtn.addEventListener("click", ()=>{
   const byType = {
     bangkok: parseBangkokCI,
     india: (t) => parseIndiaJewelleryInvoice(t) || parseIndiaTaxInvoice(t),
-    elegant: (t) => parseElegantListWithPackingList(t) || parseElegantSummaryList(t) || parseElegantList(t)
+    elegant: (t) => parseElegantSummaryLines(t) || parseElegantListWithPackingList(t) || parseElegantSummaryList(t) || parseElegantList(t)
   };
   let rows = byType[state.type] ? byType[state.type](text) : null;
   /* Never fall back to a DIFFERENT shipment type's parser. Doing so
