@@ -261,6 +261,7 @@
           <div class="tab active" data-type="bangkok">Bangkok</div>
           <div class="tab" data-type="india">India</div>
           <div class="tab" data-type="elegant">Elegant Coll.</div>
+          <div class="tab" data-type="diamantra">Diamantra</div>
         </div>
 
         <label class="field">
@@ -320,7 +321,7 @@
               <textarea id="remarksField" rows="3" placeholder="e.g. explain a value mismatch, or any other note for the courier"></textarea>
             </label>
             <label class="field"><span>Your name (for sign-off)</span>
-              <input type="text" id="signerName" value="Darshi Shah">
+              <input type="text" id="signerName" value="Weronika Byczenko">
             </label>
 
             <h2 style="margin-top:16px;">Canned responses</h2>
@@ -654,7 +655,7 @@ const INDIA_STONE_MAP = {
 };
 
 const COURIER_ADDRESS = { fedex:"pl-import@fedex.com", dhl:"odprawacelna@dhl.com", ours:null };
-const STAMP_LABEL = { bangkok:"Bangkok", india:"India", elegant:"Elegant\nCollection" };
+const STAMP_LABEL = { bangkok:"Bangkok", india:"India", elegant:"Elegant\nCollection", diamantra:"Diamantra" };
 
 const IMPORTER_ADDRESS =
 `Dane importera/odbiorcy towaru:
@@ -751,8 +752,17 @@ const COLUMNS = {
     {key:"price", label:"Cena US$", type:"num"},
     {key:"weight", label:"Waga (gram)", type:"num"},
     {key:"material", label:"Materiał", type:"text"}
+  ],
+  diamantra: [
+    {key:"desc", label:"Opis (translated)", type:"text"},
+    {key:"qty", label:"Ilość (szt)", type:"num"},
+    {key:"price", label:"Cena US$", type:"num"},
+    {key:"material", label:"Materiał", type:"text"}
   ]
 };
+// Shipment types that use the Elegant-style email template
+// (Zawartość przesyłki + shipping/insurance/grand total line).
+const ELEGANT_LIKE = new Set(["elegant","diamantra"]);
 
 /* ---------------------------------------------------------------
    Rendering
@@ -821,10 +831,12 @@ function renderTable(){
   const sumPrice = state.rows.reduce((a,r)=>a+(parseFloat(r.price)||0),0);
   const sumWeight = state.rows.reduce((a,r)=>a+(parseFloat(r.weight)||0),0);
 
-  if(state.type === "elegant"){
+  if(ELEGANT_LIKE.has(state.type)){
     const shipping = parseFloat($("#shippingCost")?.value)||0;
     const insurance = parseFloat($("#insuranceCost")?.value)||0;
-    itemsTotals.innerHTML = `<td></td><td>RAZEM</td><td>${fmt(sumQty)}</td><td>${fmt(sumPrice)}</td><td>${fmt(sumWeight)}</td><td></td><td></td>`;
+    itemsTotals.innerHTML = state.type === "diamantra"
+      ? `<td></td><td>RAZEM</td><td>${fmt(sumQty)}</td><td>${fmt(sumPrice)}</td><td></td><td></td>`
+      : `<td></td><td>RAZEM</td><td>${fmt(sumQty)}</td><td>${fmt(sumPrice)}</td><td>${fmt(sumWeight)}</td><td></td><td></td>`;
     $("#elegantExtras").style.display = "grid";
   } else {
     itemsTotals.innerHTML = `<td></td><td>Razem</td><td>${fmt(sumQty)}</td><td>TOTAL</td><td>${fmt(sumPrice)}</td><td></td>`;
@@ -881,10 +893,12 @@ function updateTotalsOnly(){
   const sumQty = state.rows.reduce((a,r)=>a+(parseFloat(r.qty)||0),0);
   const sumPrice = state.rows.reduce((a,r)=>a+(parseFloat(r.price)||0),0);
   const sumWeight = state.rows.reduce((a,r)=>a+(parseFloat(r.weight)||0),0);
-  if(state.type === "elegant"){
+  if(ELEGANT_LIKE.has(state.type)){
     const shipping = parseFloat($("#shippingCost")?.value)||0;
     const insurance = parseFloat($("#insuranceCost")?.value)||0;
-    itemsTotals.innerHTML = `<td></td><td>RAZEM</td><td>${fmt(sumQty)}</td><td>${fmt(sumPrice)}</td><td>${fmt(sumWeight)}</td><td></td><td></td>`;
+    itemsTotals.innerHTML = state.type === "diamantra"
+      ? `<td></td><td>RAZEM</td><td>${fmt(sumQty)}</td><td>${fmt(sumPrice)}</td><td></td><td></td>`
+      : `<td></td><td>RAZEM</td><td>${fmt(sumQty)}</td><td>${fmt(sumPrice)}</td><td>${fmt(sumWeight)}</td><td></td><td></td>`;
   } else {
     itemsTotals.innerHTML = `<td></td><td>Razem</td><td>${fmt(sumQty)}</td><td>TOTAL</td><td>${fmt(sumPrice)}</td><td></td>`;
   }
@@ -904,8 +918,8 @@ document.querySelectorAll(".tab").forEach(tab=>{
       : state.type === "bangkok"
       ? "Reconcile before generating. Note: if the export total exceeds 13,000 PLN, FedEx sends a proforma invoice — Poland office pays it before clearance, then shares the received HTML file with the Polish CA."
       : "Reconcile before generating. If it doesn't match, add a note below explaining the difference.";
-    $("#contentTypeField").style.display = state.type === "elegant" ? "none" : "block";
-    $("#elegantContentField").style.display = state.type === "elegant" ? "block" : "none";
+    $("#contentTypeField").style.display = ELEGANT_LIKE.has(state.type) ? "none" : "block";
+    $("#elegantContentField").style.display = ELEGANT_LIKE.has(state.type) ? "block" : "none";
     const badge = $("#stampBadge");
     $("#stampLabel").innerText = STAMP_LABEL[state.type];
     badge.classList.remove("pulse"); void badge.offsetWidth; badge.classList.add("pulse");
@@ -979,7 +993,7 @@ function updateChecklist(){
   const hasRows = state.rows.some(r => (r.desc||"").trim() && parseFloat(r.price));
   items.push({ ok: hasRows, label: hasRows ? "Line items added" : "No line items yet" });
 
-  if(state.type === "elegant"){
+  if(ELEGANT_LIKE.has(state.type)){
     const hasContent = !!$("#elegantContentLines").value.trim();
     items.push({ ok: hasContent, label: hasContent ? "Package contents filled" : "Package contents empty" });
   }
@@ -1421,6 +1435,96 @@ function normalizeNum(tok){
   return t;
 }
 
+/* ---- Diamantra Inc. (US exporter, FedEx shipped) ----
+   Simple one-line-per-item table: No | Date | Type | Description | Units
+   | Unit Price | Disc.% | Discount | Amount. "Type" cell spans two lines
+   in the PDF ("Mounted" / "Mined" or "Lab Grown"), so a row is matched
+   on the data line and the stone origin is read from the line below.
+   Descriptions give style#, item name, metal code ("18W" = 18K white),
+   total ctw and optional clarity/count. All items are jewellery with
+   natural or lab-grown diamonds. Weight (gram) is NOT on the invoice so
+   that column stays empty. Shipping comes from "Shipping Charges". */
+const DIAMANTRA_ITEM_PL = {
+  bracelet:"bransoletka", earring:"kolczyki", earrings:"kolczyki",
+  "earring climbers":"kolczyki", "eternity band":"pierścionek",
+  "eternity bands":"pierścionek", "tapered ring":"pierścionek",
+  ring:"pierścionek", pendant:"zawieszka", necklace:"naszyjnik",
+  "neck piece":"naszyjnik", chain:"łańcuszek", bangle:"bransoleta sztywna"
+};
+const DIAMANTRA_METAL_CODE = {
+  "18w":"18k", "18y":"18k", "18r":"18k", "18p":"18k",
+  "14w":"14k", "14y":"14k", "14r":"14k", "14p":"14k",
+  "10w":"10k", "10y":"10k", "9w":"9k", "9y":"9k",
+  "pt":"pt950", "plat":"pt950", "950":"pt950"
+};
+
+function parseDiamantraInvoice(text){
+  // Row: "<n> <dd-Mon-yyyy> Mounted <desc...> <units> <unitPrice> <disc%> <discount> <amount> USD"
+  const rowRe = /^\s*(\d+)\s+\d{1,2}-[A-Za-z]{3}-\d{4}\s+(Mounted|Loose)\s+(.+?)\s+(\d+\.\d{2})\s+([\d,]+\.\d{2})\s+[\d.]+\s+[\d,]*\.?\d*\s+([\d,]+\.\d{2})\s+USD\s*$/gim;
+  const lines = text.split("\n");
+  const items = [];
+  let m;
+  while((m = rowRe.exec(text)) !== null){
+    // find which line this match ends on, then check next non-empty line for Mined/Lab Grown
+    const idx = text.slice(0, m.index).split("\n").length - 1;
+    let origin = "natural";
+    for(let i = idx+1; i < Math.min(idx+3, lines.length); i++){
+      const l = lines[i].trim();
+      if(/^Lab\s*Grown/i.test(l)){ origin = "labgrown"; break; }
+      if(/^Mined/i.test(l)){ origin = "natural"; break; }
+      if(/^\s*\d+\s+\d{1,2}-[A-Za-z]{3}-/.test(lines[i])) break;
+    }
+    items.push({
+      no: parseInt(m[1],10), kind: m[2], desc: m[3].trim(),
+      qty: parseFloat(m[4]), price: parseFloat(m[6].replace(/,/g,"")),
+      origin
+    });
+  }
+  if(!items.length) return null;
+
+  // auto-fill shipping / insurance from the invoice totals block
+  const shipM = text.match(/Shipping\s+Charges?:?\s*\$?\s*([\d,]+\.\d{2})/i);
+  const otherM = text.match(/Other\s+Charges?:?\s*\$?\s*([\d,]+\.\d{2})/i);
+  if(shipM){ const el = document.querySelector("#shippingCost"); if(el) el.value = parseFloat(shipM[1].replace(/,/g,"")).toFixed(2); }
+  if(otherM){ const el = document.querySelector("#insuranceCost"); if(el) el.value = parseFloat(otherM[1].replace(/,/g,"")).toFixed(2); }
+
+  const contentSet = new Set();
+  const rows = items.map(it => {
+    const d = it.desc;
+    // metal code: 18W, 14Y, Pt, 950 etc. Appears after the item type.
+    let metalKey = null;
+    const metM = d.match(/\b(18[WYRP]|14[WYRP]|10[WY]|9[WY]|Pt|Plat|950)\b/i);
+    if(metM){ const k = metM[1].toLowerCase(); metalKey = DIAMANTRA_METAL_CODE[k] || k; }
+
+    // item type: match the longest known phrase in the description
+    let itemKey = null;
+    const dl = d.toLowerCase();
+    const candidates = ["earring climbers","eternity bands","eternity band","tapered ring","neck piece","earrings","bracelet","earring","necklace","pendant","chain","bangle","ring"];
+    for(const c of candidates){ if(dl.includes(c)){ itemKey = c; break; } }
+    const itemPl = itemKey ? (DIAMANTRA_ITEM_PL[itemKey] || itemKey) : "biżuteria";
+
+    // description in Polish — uses the same wording family as Elegant
+    const metalPhrase = metalKey ? getMaterialPhrase(metalKey) : "metalu szlachetnego";
+    const isGold = metalKey && /k$/.test(metalKey);
+    const prep = isGold ? "ze" : "z";
+    const stonePhrase = it.origin === "labgrown"
+      ? "diamentami" + (isGold ? " laboratoryjnymi" : "")
+      : "diamentami" + (isGold ? " naturalnymi" : "");
+    const descPl = `Biżuteria ${prep} ${metalPhrase} wysadzana ${stonePhrase} (${itemPl})`;
+    contentSet.add(`Biżuteria ${prep} ${metalPhrase} wysadzana ${stonePhrase}`);
+
+    return newRow({
+      desc: descPl, qty: it.qty.toFixed(2),
+      price: it.price.toFixed(2), weight: "",
+      material: metalKey ? getMaterialLabel(metalKey) : "",
+      matched: true
+    });
+  });
+  lastElegantContentLines = Array.from(contentSet);
+  return rows;
+}
+
+
 function parseElegantList(text){
   /* Anchored on the jewelry noun + metal marker rather than an exact
      column-by-column regex. A rigid single pattern breaks the moment OCR
@@ -1809,7 +1913,7 @@ function parseGeneric(text){
     desc = desc.replace(/\s{2,}/g," ").trim();
     if(!desc) return;
     const row = newRow({desc});
-    if(state.type === "elegant" && cleanNums.length >= 3){
+    if(ELEGANT_LIKE.has(state.type) && cleanNums.length >= 3){
       row.qty = cleanNums[cleanNums.length-3];
       row.rate = cleanNums[cleanNums.length-2];
       row.price = cleanNums[cleanNums.length-1];
@@ -1840,7 +1944,8 @@ parseRowsBtn.addEventListener("click", ()=>{
   const byType = {
     bangkok: parseBangkokCI,
     india: (t) => parseIndiaJewelleryInvoice(t) || parseIndiaTaxInvoice(t),
-    elegant: (t) => parseElegantSummaryLines(t) || parseElegantListWithPackingList(t) || parseElegantSummaryList(t) || parseElegantList(t)
+    elegant: (t) => parseElegantSummaryLines(t) || parseElegantListWithPackingList(t) || parseElegantSummaryList(t) || parseElegantList(t),
+    diamantra: parseDiamantraInvoice
   };
   let rows = byType[state.type] ? byType[state.type](text) : null;
   /* Never fall back to a DIFFERENT shipment type's parser. Doing so
@@ -1868,7 +1973,7 @@ parseRowsBtn.addEventListener("click", ()=>{
   // Elegant Collection invoices state Freight/Insurance directly
   // ("Freight US$. 130.72", "INS US$. 10.00") — pull those instead of
   // making the user retype numbers that are already on the document.
-  if(state.type === "elegant"){
+  if(ELEGANT_LIKE.has(state.type)){
     const freightMatch = text.match(/Freight\s*US\$?\.?\s*([\d,]+\.\d+)/i);
     const insMatch = text.match(/\bINS\s*US\$?\.?\s*([\d,]+\.\d+)/i) || text.match(/Insurance\s*US\$?\.?\s*([\d,]+\.\d+)/i);
     if(freightMatch) $("#shippingCost").value = freightMatch[1].replace(/,/g,"");
@@ -1896,7 +2001,7 @@ parseRowsBtn.addEventListener("click", ()=>{
        shipment doesn't need it (matches real sent examples exactly:
        the 1-row invoice omits it, the 7-row invoice includes it on
        every line since several rows would otherwise read identically). */
-    if(state.type === "elegant" && state.rows.length > 1){
+    if(ELEGANT_LIKE.has(state.type) && state.rows.length > 1){
       state.rows.forEach(r=>{
         if(r.jewelryType && !r.desc.includes(`(${r.jewelryType})`)){
           r.desc = `${r.desc} (${r.jewelryType})`;
@@ -1924,7 +2029,7 @@ function esc(s){
 $("#generateBtn").addEventListener("click", ()=>{
   const cols = COLUMNS[state.type];
 
-  if(state.type === "elegant" && !$("#elegantContentLines").value.trim()){
+  if(ELEGANT_LIKE.has(state.type) && !$("#elegantContentLines").value.trim()){
     $("#elegantContentLines").style.borderColor = "var(--stamp)";
     $("#elegantContentLines").focus();
     $("#outputBox").innerHTML = '<p style="color:var(--stamp);">⚠ Fill in the "Zawartość przesyłki — general material-type lines" field above before generating — the email can\'t be sent with that line blank.</p>';
@@ -1935,7 +2040,7 @@ $("#generateBtn").addEventListener("click", ()=>{
   const addr = COURIER_ADDRESS[source];
 
   let contentLineText, contentLineHtml;
-  if(state.type === "elegant"){
+  if(ELEGANT_LIKE.has(state.type)){
     const lines = $("#elegantContentLines").value.trim();
     const arr = (lines || "(fill in material-type description lines above)").split("\n");
     contentLineText = "Zawartość przesyłki:\n" + arr.join("\n\n");
@@ -1964,13 +2069,15 @@ $("#generateBtn").addEventListener("click", ()=>{
   const insurance = parseFloat($("#insuranceCost").value)||0;
 
   let totalsRow;
-  if(state.type === "elegant"){
+  if(ELEGANT_LIKE.has(state.type)){
     // RAZEM is items-only — the grand total (items + shipping +
     // insurance) gets its own separate "Razem: X" line below Koszt
     // wysyłki/Ubezpieczenie instead (per explicit annotated correction
     // on a real generated email: RAZEM=14745.27, then a separate
     // "Razem: 14951.00" line after the shipping/insurance lines).
-    totalsRow = ["", "RAZEM", fmt(sumQty), fmt(sumPrice), fmt(sumWeight), ""];
+    totalsRow = state.type === "diamantra"
+      ? ["", "RAZEM", fmt(sumQty), fmt(sumPrice), ""]
+      : ["", "RAZEM", fmt(sumQty), fmt(sumPrice), fmt(sumWeight), ""];
   } else {
     totalsRow = ["", "Razem", fmt(sumQty), "TOTAL", fmt(sumPrice)];
   }
@@ -2000,8 +2107,8 @@ $("#generateBtn").addEventListener("click", ()=>{
   tableHtml += `</table>`;
 
   const grandTotal = fmt(sumPrice + shipping + insurance);
-  const extraLinesText = state.type === "elegant" ? `\nKoszt wysyłki: ${fmt(shipping)}\nUbezpieczenie: ${fmt(insurance)}\nRazem: ${grandTotal}\n` : "";
-  const extraLinesHtml = state.type === "elegant" ? `<p>Koszt wysyłki: ${fmt(shipping)}<br>Ubezpieczenie: ${fmt(insurance)}<br><b>Razem: ${grandTotal}</b></p>` : "";
+  const extraLinesText = ELEGANT_LIKE.has(state.type) ? `\nKoszt wysyłki: ${fmt(shipping)}\nUbezpieczenie: ${fmt(insurance)}\nRazem: ${grandTotal}\n` : "";
+  const extraLinesHtml = ELEGANT_LIKE.has(state.type) ? `<p>Koszt wysyłki: ${fmt(shipping)}<br>Ubezpieczenie: ${fmt(insurance)}<br><b>Razem: ${grandTotal}</b></p>` : "";
 
   const remarks = $("#remarksField").value.trim();
   const showMissing = state.type === "india" && $("#cannedMissing").checked;
@@ -2095,7 +2202,7 @@ $("#resetBtn").addEventListener("click", ()=>{
   if(!confirm("Clear all fields and start a fresh form? This can't be undone.")) return;
   state.rows = [newRow()];
   $("#remarksField").value = "";
-  $("#signerName").value = "Darshil Shah";
+  $("#signerName").value = "Weronika Byczenko";
   $("#elegantContentLines").value = "";
   $("#indiaInvoiceSum").value = "";
   $("#indiaAwbValue").value = "";
